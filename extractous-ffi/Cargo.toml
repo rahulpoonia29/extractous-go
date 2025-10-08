@@ -1,0 +1,28 @@
+[package]
+name = "extractous-ffi"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "C FFI bindings for extractous document extraction library"
+license = "Apache-2.0"
+repository = "https://github.com/yourusername/extractous-go"
+
+[lib]
+name = "extractous_ffi"
+crate-type = ["cdylib"]
+
+[dependencies]
+extractous = "0.3"
+libc = "0.2"
+
+[build-dependencies]
+cbindgen = "0.29"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = false  # Keep symbols for debugging
+
+[profile.dev]
+opt-level = 0
