@@ -17,7 +17,6 @@ use std::ptr;
 /// Create a new Extractor with default configuration
 ///
 /// # Returns
-///
 /// Pointer to new Extractor, or NULL on failure.
 /// Must be freed with `extractous_extractor_free`.
 #[no_mangle]
@@ -29,7 +28,6 @@ pub extern "C" fn extractous_extractor_new() -> *mut CExtractor {
 /// Free an Extractor instance
 ///
 /// # Safety
-///
 /// - `handle` must be a valid pointer returned by `extractous_extractor_new`
 /// - `handle` must not be used after this call
 /// - Calling this twice on the same pointer causes undefined behavior
@@ -47,12 +45,10 @@ pub unsafe extern "C" fn extractous_extractor_free(handle: *mut CExtractor) {
 /// Set maximum length for extracted string content
 ///
 /// # Safety
-///
 /// - `handle` must be a valid Extractor pointer
 /// - Returns a NEW handle; old handle is consumed and must not be used
 ///
 /// # Returns
-///
 /// New Extractor handle with updated config, or NULL on error.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_set_extract_string_max_length(
@@ -64,21 +60,18 @@ pub unsafe extern "C" fn extractous_extractor_set_extract_string_max_length(
     }
 
     let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
-    let new_extractor = old_extractor.set_extract_string_max_length(max_length);
-
+    let new_extractor = old_extractor.set_extract_string_max_length(max_length as i32);
     Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
 }
 
 /// Set character encoding for extraction
 ///
 /// # Safety
-///
 /// - `handle` must be a valid Extractor pointer
 /// - `encoding` must be a valid CHARSET_* constant
 /// - Returns a NEW handle; old handle is consumed
 ///
 /// # Returns
-///
 /// New Extractor handle, or NULL if encoding is invalid.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_set_encoding(
@@ -90,22 +83,20 @@ pub unsafe extern "C" fn extractous_extractor_set_encoding(
     }
 
     let charset = match encoding {
-        CHARSET_UTF8 => CharSet::UTF_8,
+        CHARSET_UTF_8 => CharSet::UTF_8,
         CHARSET_US_ASCII => CharSet::US_ASCII,
-        CHARSET_UTF16BE => CharSet::UTF_16BE,
+        CHARSET_UTF_16BE => CharSet::UTF_16BE,
         _ => return ptr::null_mut(),
     };
 
     let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
     let new_extractor = old_extractor.set_encoding(charset);
-
     Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
 }
 
 /// Set PDF parser configuration
 ///
 /// # Safety
-///
 /// - `handle` must be a valid Extractor pointer
 /// - `config` must be a valid PdfParserConfig pointer
 /// - Returns a NEW handle; old handle is consumed
@@ -121,14 +112,12 @@ pub unsafe extern "C" fn extractous_extractor_set_pdf_config(
     let pdf_config = &*(config as *mut crate::ecore::PdfParserConfig);
     let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
     let new_extractor = old_extractor.set_pdf_config(pdf_config.clone());
-
     Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
 }
 
 /// Set Office parser configuration
 ///
 /// # Safety
-///
 /// Same safety requirements as `extractous_extractor_set_pdf_config`.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_set_office_config(
@@ -142,14 +131,12 @@ pub unsafe extern "C" fn extractous_extractor_set_office_config(
     let office_config = &*(config as *mut crate::ecore::OfficeParserConfig);
     let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
     let new_extractor = old_extractor.set_office_config(office_config.clone());
-
     Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
 }
 
 /// Set OCR configuration
 ///
 /// # Safety
-///
 /// Same safety requirements as `extractous_extractor_set_pdf_config`.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
@@ -163,7 +150,6 @@ pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
     let ocr_config = &*(config as *mut crate::ecore::TesseractOcrConfig);
     let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
     let new_extractor = old_extractor.set_ocr_config(ocr_config.clone());
-
     Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
 }
 
@@ -174,7 +160,6 @@ pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
 /// Extract file content to string
 ///
 /// # Safety
-///
 /// - `handle` must be a valid Extractor pointer
 /// - `path` must be a valid null-terminated UTF-8 string
 /// - `out_content` and `out_metadata` must be valid pointers
@@ -182,7 +167,6 @@ pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
 /// - Caller must free returned metadata with `extractous_metadata_free`
 ///
 /// # Returns
-///
 /// ERR_OK on success, error code on failure.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
@@ -219,14 +203,13 @@ pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
 
             ERR_OK
         }
-        Err(_) => ERR_EXTRACTION_FAILED,
+        Err(e) => extractous_error_to_code(&e),
     }
 }
 
 /// Extract file content to stream
 ///
 /// # Safety
-///
 /// - `handle` must be a valid Extractor pointer
 /// - `path` must be a valid null-terminated UTF-8 string
 /// - `out_reader` and `out_metadata` must be valid pointers
@@ -234,7 +217,6 @@ pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
 /// - Caller must free returned metadata with `extractous_metadata_free`
 ///
 /// # Returns
-///
 /// ERR_OK on success, error code on failure.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_extract_file(
@@ -260,20 +242,18 @@ pub unsafe extern "C" fn extractous_extractor_extract_file(
             *out_metadata = metadata_to_c(metadata);
             ERR_OK
         }
-        Err(_) => ERR_EXTRACTION_FAILED,
+        Err(e) => extractous_error_to_code(&e),
     }
 }
 
 /// Extract from byte array to string
 ///
 /// # Safety
-///
 /// - `handle` must be a valid Extractor pointer
 /// - `data` must point to at least `data_len` valid bytes
 /// - `out_content` and `out_metadata` must be valid pointers
 ///
 /// # Returns
-///
 /// ERR_OK on success, error code on failure.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
@@ -296,10 +276,45 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
                 Ok(s) => s.into_raw(),
                 Err(_) => return ERR_INVALID_STRING,
             };
+
             *out_metadata = metadata_to_c(metadata);
             ERR_OK
         }
-        Err(_) => ERR_EXTRACTION_FAILED,
+        Err(e) => extractous_error_to_code(&e),
+    }
+}
+
+/// Extract from byte array to stream
+///
+/// # Safety
+/// - `handle` must be a valid Extractor pointer
+/// - `data` must point to at least `data_len` valid bytes
+/// - `out_reader` and `out_metadata` must be valid pointers
+///
+/// # Returns
+/// ERR_OK on success, error code on failure.
+#[no_mangle]
+pub unsafe extern "C" fn extractous_extractor_extract_bytes(
+    handle: *mut CExtractor,
+    data: *const u8,
+    data_len: libc::size_t,
+    out_reader: *mut *mut CStreamReader,
+    out_metadata: *mut *mut CMetadata,
+) -> libc::c_int {
+    if handle.is_null() || data.is_null() || out_reader.is_null() || out_metadata.is_null() {
+        return ERR_NULL_POINTER;
+    }
+
+    let bytes = std::slice::from_raw_parts(data, data_len);
+    let extractor = &*(handle as *mut CoreExtractor);
+
+    match extractor.extract_bytes(bytes) {
+        Ok((reader, metadata)) => {
+            *out_reader = Box::into_raw(Box::new(reader)) as *mut CStreamReader;
+            *out_metadata = metadata_to_c(metadata);
+            ERR_OK
+        }
+        Err(e) => extractous_error_to_code(&e),
     }
 }
 
@@ -310,7 +325,6 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
 /// Free a string allocated by Rust
 ///
 /// # Safety
-///
 /// - `s` must be a pointer returned by an extractous function
 /// - `s` must not be used after this call
 /// - Calling this twice on the same pointer causes undefined behavior

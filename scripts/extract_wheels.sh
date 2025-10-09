@@ -1,41 +1,132 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-EXTRACTOUS_VERSION="0.3.0"
-BASE_URL="https://files.pythonhosted.org/packages"
+#=============================================================
+# Extractous Binary Downloader & Extractor
+#=============================================================
+EXTRACTOUS_VERSION="${1:-0.3.0}"
+PACKAGE="extractous"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+NATIVE_DIR="$PROJECT_ROOT/native"
 
-declare -A WHEELS=(
-    ["linux_amd64"]="6f/d9/1a3838e24f78902ca1a594110a00812134102c5cad13f889141509062481/extractous-${EXTRACTOUS_VERSION}-cp38-abi3-manylinux_2_28_x86_64.whl"
-    ["darwin_arm64"]="66/91/7debbfabadb88d34687bf93e23d176692bdae7e82c51180b2481710bb709/extractous-${EXTRACTOUS_VERSION}-cp38-abi3-macosx_11_0_arm64.whl"
-    ["darwin_amd64"]="98/50/99d6e8982ced454cc7a0e184988b63c65e199587626c45404fc7b6ab9d90/extractous-${EXTRACTOUS_VERSION}-cp38-abi3-macosx_10_12_x86_64.whl"
-    ["windows_amd64"]="07/a1/dd01a3abb4c4af89cf3775735948d76522233ae3550a166b8c2f7c849a52/extractous-${EXTRACTOUS_VERSION}-cp38-abi3-win_amd64.whl"
-)
+# Temporary dirs
+DOWNLOAD_DIR=$(mktemp -d -t extractous_download_XXXX)
+EXTRACT_DIR=$(mktemp -d -t extractous_extract_XXXX)
+trap "rm -rf '$DOWNLOAD_DIR' '$EXTRACT_DIR'" EXIT
 
-echo "Extracting native libraries from Python wheels v${EXTRACTOUS_VERSION}..."
+echo "==================================================================="
+echo "Extractous Binary Fetch Script"
+echo "==================================================================="
+echo "Version: $EXTRACTOUS_VERSION"
+echo "Project root: $PROJECT_ROOT"
+echo ""
 
-for platform in "${!WHEELS[@]}"; do
-    echo "  Processing $platform..."
-    
-    url="${BASE_URL}/${WHEELS[$platform]}"
-    wheel_name=$(basename "$url")
-    
-    wget -q "$url" -O "/tmp/$wheel_name"
-    unzip -q "/tmp/$wheel_name" -d "/tmp/$platform"
-    
-    mkdir -p "native/$platform"
-    
-    if [[ "$platform" == windows* ]]; then
-        cp /tmp/$platform/extractous/*.dll native/$platform/
-        rm -f native/$platform/_extractous*.pyd
-    else
-        find /tmp/$platform/extractous -type f \( -name "*.so" -o -name "*.dylib" \) -exec cp {} native/$platform/ \;
-        rm -f native/$platform/_extractous*.so
-    fi
-    
-    count=$(ls native/$platform | wc -l)
-    echo "    ✓ Extracted $count libraries"
-    
-    rm -rf "/tmp/$platform" "/tmp/$wheel_name"
+#-------------------------------------------------------------
+# Check dependencies
+#-------------------------------------------------------------
+for cmd in curl jq unzip; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "ERROR: Required command '$cmd' not found."
+    exit 1
+  fi
 done
 
-echo "All native libraries extracted successfully!"
+#-------------------------------------------------------------
+# Detect platform
+#-------------------------------------------------------------
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+case "$OS" in
+  linux*)   PLATFORM="linux"; LIB_EXT="so" ;;
+  darwin*)  PLATFORM="macosx"; LIB_EXT="dylib" ;;
+  mingw*|msys*|cygwin*|windows*) PLATFORM="win"; LIB_EXT="dll" ;;
+  *) echo "ERROR: Unsupported OS: $OS"; exit 1 ;;
+esac
+
+case "$ARCH" in
+  x86_64|amd64) ARCH_TAG="x86_64"; ARCH="amd64" ;;
+  aarch64|arm64) ARCH_TAG="arm64"; ARCH="arm64" ;;
+  *) echo "ERROR: Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
+#-------------------------------------------------------------
+# Determine wheel platform tag
+#-------------------------------------------------------------
+case "${PLATFORM}_${ARCH}" in
+  linux_amd64)   WHEEL_TAG="manylinux_2_28_x86_64" ;;
+  darwin_amd64)  WHEEL_TAG="macosx_10_12_x86_64" ;;
+  darwin_arm64)  WHEEL_TAG="macosx_11_0_arm64" ;;
+  win_amd64)     WHEEL_TAG="win_amd64" ;;
+  *) echo "ERROR: No wheel available for this platform"; exit 1 ;;
+esac
+
+TARGET_DIR="$NATIVE_DIR/${PLATFORM}_${ARCH}"
+mkdir -p "$TARGET_DIR"
+
+echo "Detected platform: ${PLATFORM}_${ARCH}"
+echo "Wheel tag: $WHEEL_TAG"
+echo "Target dir: $TARGET_DIR"
+echo ""
+
+#-------------------------------------------------------------
+# Fetch wheel URL from PyPI JSON API
+#-------------------------------------------------------------
+JSON_URL="https://pypi.org/pypi/${PACKAGE}/${EXTRACTOUS_VERSION}/json"
+echo "Fetching wheel URL from $JSON_URL ..."
+
+WHEEL_URL=$(curl -s "$JSON_URL" \
+  | jq -r --arg TAG "$WHEEL_TAG" '.urls[] | select(.filename | contains($TAG)) | .url' \
+  | head -n 1)
+
+if [ -z "$WHEEL_URL" ] || [ "$WHEEL_URL" = "null" ]; then
+  echo "ERROR: Could not find wheel for platform tag '$WHEEL_TAG'"
+  exit 1
+fi
+
+echo "Found wheel: $WHEEL_URL"
+echo ""
+
+#-------------------------------------------------------------
+# Download the wheel
+#-------------------------------------------------------------
+WHEEL_FILE="$DOWNLOAD_DIR/$(basename "$WHEEL_URL")"
+echo "Downloading wheel..."
+curl -L -o "$WHEEL_FILE" "$WHEEL_URL"
+echo "Downloaded: $WHEEL_FILE"
+echo ""
+
+#-------------------------------------------------------------
+# Extract wheel contents
+#-------------------------------------------------------------
+echo "Extracting wheel..."
+unzip -q "$WHEEL_FILE" -d "$EXTRACT_DIR"
+
+echo "Copying libraries..."
+LIBS_COPIED=0
+
+for lib in "$EXTRACT_DIR"/extractous/*."${LIB_EXT}"*; do
+  if [ -f "$lib" ]; then
+    cp "$lib" "$TARGET_DIR/"
+    echo "  ✓ $(basename "$lib")"
+    LIBS_COPIED=$((LIBS_COPIED + 1))
+  fi
+done
+
+echo ""
+if [ $LIBS_COPIED -eq 0 ]; then
+  echo "ERROR: No libraries were extracted! Check wheel contents."
+  exit 1
+fi
+
+#-------------------------------------------------------------
+# Finish
+#-------------------------------------------------------------
+echo "==================================================================="
+echo "✓ SUCCESS: Extracted $LIBS_COPIED libraries"
+echo "==================================================================="
+echo ""
+echo "Libraries installed to: $TARGET_DIR"
+ls -lh "$TARGET_DIR"
+echo ""

@@ -414,9 +414,7 @@ dependencies = [
 
 [[package]]
 name = "extractous"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "082fd3334d09f6722e230d3a824e4ebab34bcf88e8d40b40c0bdb806d436d3f4"
+version = "0.2.1"
 dependencies = [
  "bytemuck",
  "flate2",

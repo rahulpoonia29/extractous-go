@@ -1,49 +1,24 @@
 //! Error code definitions and error handling utilities
 
+use std::error::Error as StdError;
 use std::ffi::CString;
 use std::os::raw::c_int;
 
 // ============================================================================
 // Error Codes
 // ============================================================================
-
-/// Success, no error occurred
 pub const ERR_OK: c_int = 0;
-
-/// Null pointer was provided as an argument
 pub const ERR_NULL_POINTER: c_int = -1;
-
-/// Invalid UTF-8 string encoding
 pub const ERR_INVALID_UTF8: c_int = -2;
-
-/// String conversion failed
 pub const ERR_INVALID_STRING: c_int = -3;
-
-/// Document extraction failed
 pub const ERR_EXTRACTION_FAILED: c_int = -4;
-
-/// I/O operation failed
 pub const ERR_IO_ERROR: c_int = -5;
-
-/// Invalid configuration provided
 pub const ERR_INVALID_CONFIG: c_int = -6;
-
-/// Invalid enum value provided
 pub const ERR_INVALID_ENUM: c_int = -7;
 
 // ============================================================================
 // Error Message Function
 // ============================================================================
-
-/// Get human-readable error message for error code
-///
-/// # Safety
-///
-/// The returned string must be freed with `extractous_string_free`.
-///
-/// # Returns
-///
-/// Pointer to null-terminated C string, or NULL on error.
 #[no_mangle]
 pub extern "C" fn extractous_error_message(code: c_int) -> *mut libc::c_char {
     let msg = match code {
@@ -52,7 +27,7 @@ pub extern "C" fn extractous_error_message(code: c_int) -> *mut libc::c_char {
         ERR_INVALID_UTF8 => "Invalid UTF-8 string",
         ERR_INVALID_STRING => "String conversion failed",
         ERR_EXTRACTION_FAILED => "Extraction failed",
-        ERR_IO_ERROR => "I/O error",
+        ERR_IO_ERROR => "IO error",
         ERR_INVALID_CONFIG => "Invalid configuration",
         ERR_INVALID_ENUM => "Invalid enum value",
         _ => "Unknown error",
@@ -62,4 +37,31 @@ pub extern "C" fn extractous_error_message(code: c_int) -> *mut libc::c_char {
         Ok(s) => s.into_raw(),
         Err(_) => std::ptr::null_mut(),
     }
+}
+
+// ============================================================================
+// Error Conversion Function
+// ============================================================================
+
+/// Helper to convert extractous errors to error codes
+pub(crate) fn extractous_error_to_code(err: &crate::ecore::Error) -> c_int {
+    use std::io::ErrorKind;
+
+    // Walk the error's source chain to find the underlying cause.
+    let mut source = err.source();
+    while let Some(cause) = source {
+        // Check if the cause is a standard I/O error.
+        if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
+            return match io_err.kind() {
+                ErrorKind::NotFound => ERR_IO_ERROR,
+                ErrorKind::PermissionDenied => ERR_IO_ERROR,
+                // You can add more specific IO errors here if needed
+                _ => ERR_IO_ERROR,
+            };
+        }
+        source = cause.source();
+    }
+
+    // If no specific I/O error was found, return a general extraction failure.
+    ERR_EXTRACTION_FAILED
 }

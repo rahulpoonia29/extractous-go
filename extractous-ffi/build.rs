@@ -1,5 +1,4 @@
 use std::env;
-use std::fs;
 use std::path::PathBuf;
 
 fn main() {
@@ -10,16 +9,16 @@ fn main() {
 
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    // Step 1: Generate C header file
+    // Generate C header file
     generate_header(&crate_dir);
-    link_prebuilt_libs();
 
-    // Step 2: Set RPATH for dynamic library loading
-    set_rpath();
+    // Setup linking to prebuilt libraries
+    setup_library_linking(&crate_dir);
 
-    // Step 3: Inform Cargo to rerun if source changes
-    println!("cargo:rerun-if-changed=src/");
+    // Inform Cargo to rerun if source changes
+    println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=../native");
 }
 
 fn generate_header(crate_dir: &str) {
@@ -29,7 +28,7 @@ fn generate_header(crate_dir: &str) {
         .join("include");
 
     // Create include directory if it doesn't exist
-    fs::create_dir_all(&include_dir).expect("Failed to create include directory");
+    std::fs::create_dir_all(&include_dir).expect("Failed to create include directory");
 
     let header_path = include_dir.join("extractous.h");
 
@@ -45,58 +44,90 @@ fn generate_header(crate_dir: &str) {
         .with_documentation(true)
         .with_cpp_compat(true)
         .with_tab_width(4)
+        .with_no_includes()
+        .with_sys_include("stdint.h")
+        .with_sys_include("stdbool.h")
+        .with_sys_include("stdlib.h")
         .generate()
         .expect("Unable to generate C bindings")
         .write_to_file(&header_path);
 
     println!(
-        "cargo:warning=Generated C header at {}",
+        "cargo:warning=Generated C header at: {}",
         header_path.display()
     );
 }
 
-fn link_prebuilt_libs() {
-    let manifest = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let prebuilt_root = PathBuf::from(&manifest).parent().unwrap().join("native");
+fn setup_library_linking(crate_dir: &str) {
+    let root_dir = PathBuf::from(crate_dir).parent().unwrap().to_path_buf();
 
-    let target = env::var("TARGET").unwrap();
-    let plat = if target.contains("x86_64-unknown-linux") {
-        "linux_amd64"
-    } else if target.contains("aarch64-unknown-linux") {
-        "linux_arm64"
-    } else if target.contains("x86_64-apple-darwin") {
-        "darwin_amd64"
-    } else if target.contains("aarch64-apple-darwin") {
-        "darwin_arm64"
-    } else if target.contains("x86_64-pc-windows") {
-        "windows_amd64"
-    } else {
-        panic!("Unsupported target: {}", target);
+    // Detect platform and architecture
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+
+    // Determine the native library directory based on platform
+    let platform_dir = match (target_os.as_str(), target_arch.as_str()) {
+        ("linux", "x86_64") => "linux_amd64",
+        ("linux", "aarch64") => "linux_arm64",
+        ("macos", "x86_64") => "darwin_amd64",
+        ("macos", "aarch64") => "darwin_arm64",
+        ("windows", "x86_64") => "windows_amd64",
+        _ => panic!("Unsupported platform: {} {}", target_os, target_arch),
     };
 
-    let libdir = prebuilt_root.join(plat);
-    if !libdir.exists() {
+    let native_libs_dir = root_dir.join("native").join(platform_dir);
+
+    // Check if the native library directory exists
+    if !native_libs_dir.exists() {
+        eprintln!("\n\n=================================================================");
+        eprintln!("ERROR: Native libraries not found!");
+        eprintln!("=================================================================");
+        eprintln!("Expected directory: {}", native_libs_dir.display());
+        eprintln!("\nPlease extract the prebuilt libraries from the Python wheel:");
+        eprintln!("  1. Download the appropriate wheel for your platform from:");
+        eprintln!("     https://pypi.org/project/extractous/#files");
+        eprintln!("  2. Extract the wheel (it's a zip file)");
+        eprintln!(
+            "  3. Copy the .so/.dylib/.dll files to: {}",
+            native_libs_dir.display()
+        );
+        eprintln!("\nRequired files:");
+        eprintln!("  - libtika_native.so (Linux)");
+        eprintln!("  - libtika_native.dylib (macOS)");
+        eprintln!("  - libtika_native.dll (Windows)");
+        eprintln!("  - All dependent JVM libraries (java.dll, jvm.dll, etc.)");
+        eprintln!("=================================================================\n");
         panic!(
-            "Prebuilt libs not found at {}. Run scripts/extract-wheels.sh",
-            libdir.display()
+            "Native libraries not found at: {}",
+            native_libs_dir.display()
         );
     }
 
-    // Tell rustc/ld where to find libtika_native.* and friends
-    println!("cargo:rustc-link-search=native={}", libdir.display());
-    println!("cargo:rustc-link-lib=dylib=tika_native"); // links -ltika_native
-}
+    println!(
+        "cargo:warning=Using native libraries from: {}",
+        native_libs_dir.display()
+    );
 
-fn set_rpath() {
-    let target = env::var("TARGET").unwrap();
+    // Tell cargo where to find the libraries
+    println!(
+        "cargo:rustc-link-search=native={}",
+        native_libs_dir.display()
+    );
 
-    // Set RPATH so the built library can find other libraries in the same directory
-    if target.contains("linux") {
-        // $ORIGIN means "directory containing this library"
+    // Tell cargo to link against libtika_native
+    // On Windows, the library is named libtika_native.dll, on Unix it's libtika_native.so/.dylib
+    let lib_name = if target_os == "windows" {
+        "libtika_native" // Windows uses the full name with prefix
+    } else {
+        "tika_native" // Unix strips the 'lib' prefix
+    };
+
+    println!("cargo:rustc-link-lib=dylib={}", lib_name);
+
+    // Set rpath for runtime library loading
+    if target_os == "linux" {
         println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
-    } else if target.contains("darwin") {
-        // @loader_path is macOS equivalent of $ORIGIN
+    } else if target_os == "macos" {
         println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
     }
-    // Windows doesn't need RPATH - uses DLL search path
 }

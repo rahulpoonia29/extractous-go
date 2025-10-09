@@ -1,0 +1,52 @@
+[package]
+name = "extractous"
+version = "0.2.1"
+edition = "2021"
+
+description = """
+Extractous provides a fast and efficient way to extract content from all kind of file formats including PDF, Word, Excel
+CSV, Email etc... Internally it uses a natively compiled Apache Tika for formats are not supported natively by the Rust
+core
+"""
+license = "Apache-2.0"
+homepage = "https://extractous.yobix.ai"
+repository = "https://github.com/yobix-ai/extractous"
+authors = ["Yobix AI <dev@yobix.ai>"]
+readme = "README.md"
+keywords = ["unstructured", "tika", "text", "pdf", "parser"]
+categories = ["parsing", "text-processing"]
+
+[[bench]]
+name = "extractor"
+harness = false
+required-features = []
+
+[dependencies]
+libc = { version = "0.2.158" }
+jni = { version = "0.21.1",features = ["invocation"] }
+thiserror = { version = "1.0.63" }
+bytemuck =  { version = "1.17.1"}
+# String enums
+strum = { version = "0.26.2" }
+strum_macros = { version = "0.26.2" }
+
+[dev-dependencies]
+textdistance = "1.1.0"
+test-case = "3.0"
+criterion = "0.5.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+quick-xml = "0.37.1"
+
+[build-dependencies]
+fs_extra = { version = "1.3.0" }
+reqwest = { version = "0.12.7", features = ["blocking", "json"] }
+zip = "2.2.0"
+flate2 = "1.0.33"
+tar = "0.4.41"
+walkdir = "2.5.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+rpath = true

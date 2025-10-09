@@ -5,6 +5,10 @@
 
 use std::os::raw::c_int;
 
+// ============================================================================
+// Opaque Handle Types
+// ============================================================================
+
 /// Opaque handle to an Extractor instance
 ///
 /// This is an opaque pointer that should only be used through the FFI functions.
@@ -38,6 +42,10 @@ pub struct CTesseractOcrConfig {
     _private: [u8; 0],
 }
 
+// ============================================================================
+// Metadata Structure
+// ============================================================================
+
 /// C-compatible metadata structure
 ///
 /// Contains parallel arrays of keys and values, with length stored separately.
@@ -52,15 +60,21 @@ pub struct CMetadata {
     pub len: libc::size_t,
 }
 
-// Character Set Constants (only the 3 supported by extractous)
+// ============================================================================
+// Constants
+// ============================================================================
+
+// Character Set Constants
+
 /// UTF-8 encoding (default)
-pub const CHARSET_UTF8: c_int = 0;
+pub const CHARSET_UTF_8: c_int = 0;
 /// US-ASCII encoding
 pub const CHARSET_US_ASCII: c_int = 1;
 /// UTF-16 Big Endian encoding
-pub const CHARSET_UTF16BE: c_int = 2;
+pub const CHARSET_UTF_16BE: c_int = 2;
 
 // PDF OCR Strategy Constants
+
 /// No OCR, extract existing text only
 pub const PDF_OCR_NO_OCR: c_int = 0;
 /// OCR only, ignore existing text
