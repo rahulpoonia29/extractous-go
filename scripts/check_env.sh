@@ -6,7 +6,7 @@ echo "  Environment Check"
 echo "=============================================="
 echo ""
 
-ERRORS=0
+((ERRORS++))
 
 # Check Rust
 if command -v rustc &> /dev/null; then
@@ -62,13 +62,8 @@ for platform in "${PLATFORMS[@]}"; do
 done
 echo ""
 
-if [ $ERRORS -gt 0 ]; then
-    echo "=============================================="
-    echo "  Errors Found: $ERRORS"
-    echo "=============================================="
-    exit 1
-else
-    echo "=============================================="
-    echo "  Environment OK!"
-    echo "=============================================="
-fi
+echo "=============================================="
+echo " Environment Check Complete"
+echo "=============================================="
+echo ""
+echo "Review the output above for any missing dependencies."

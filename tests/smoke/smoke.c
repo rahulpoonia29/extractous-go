@@ -5,7 +5,11 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-#define TEST_DIR "test_files"
+#ifndef DT_REG
+#define DT_REG 8
+#endif
+
+#define TEST_DIR "../testdata"
 
 #define REQ(c, m) do { if (!(c)) { fprintf(stderr, "FAIL: %s\n", m); return 1; } } while (0)
 

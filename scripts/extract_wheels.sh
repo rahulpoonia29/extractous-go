@@ -4,9 +4,6 @@ set -euo pipefail
 #=============================================================================
 # Extractous Native Library Extractor
 #=============================================================================
-# Downloads extractous Python wheels and extracts native libraries
-# for cross-platform Go bindings.
-#=============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -23,7 +20,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Supported platforms
 declare -A PLATFORM_MAP=(
@@ -75,20 +72,20 @@ print_section() {
     echo -e "${BLUE}-------------------------------------------------------------------${NC}"
 }
 
+print_info() {
+    echo -e "${CYAN}→${NC} $1" >&2
+}
+
 print_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "${GREEN}✓${NC} $1" >&2
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1" >&2
 }
 
 print_error() {
     echo -e "${RED}✗${NC} $1" >&2
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
-print_info() {
-    echo -e "${CYAN}→${NC} $1"
 }
 
 check_dependencies() {
@@ -116,15 +113,9 @@ fetch_pypi_metadata() {
     
     if ! JSON_DATA=$(curl -fsSL "$PYPI_JSON_URL" 2>/dev/null); then
         print_error "Failed to fetch package metadata from PyPI"
-        echo ""
-        echo "Possible causes:"
-        echo "  - Network connectivity issues"
-        echo "  - Invalid version: $EXTRACTOUS_VERSION"
-        echo "  - PyPI service unavailable"
         exit 1
     fi
     
-    # Validate JSON
     if ! echo "$JSON_DATA" | jq -e '.urls' >/dev/null 2>&1; then
         print_error "Invalid JSON response from PyPI"
         exit 1
@@ -141,7 +132,7 @@ get_wheel_info() {
         select(.packagetype=="bdist_wheel") |
         select(.filename | contains($tag)) |
         "\(.filename)|\(.url)|\(.digests.sha256)"
-    '
+    ' | head -n 1
 }
 
 download_wheel() {
@@ -165,19 +156,18 @@ download_wheel() {
     
     print_info "Downloading: $filename"
     
-    # Download with progress bar if terminal supports it
-    if [ -t 1 ]; then
-        curl -fL --progress-bar -o "$wheel_path" "$url"
-    else
-        curl -fsSL -o "$wheel_path" "$url"
+    # Download with progress
+    if ! curl -fL -s -o "$wheel_path" "$url" 2>&1; then
+        print_error "Download failed"
+        return 1
     fi
     
     # Verify checksum
     print_info "Verifying checksum..."
-    if ! echo "$sha256  $wheel_path" | sha256sum -c --status; then
+    if ! echo "$sha256  $wheel_path" | sha256sum -c --status 2>/dev/null; then
         print_error "Checksum verification failed!"
         rm -f "$wheel_path"
-        exit 1
+        return 1
     fi
     
     print_success "Download complete and verified"
@@ -188,12 +178,23 @@ extract_libraries() {
     local wheel_path="$1"
     local platform_dir="$2"
     local extension="$3"
+
+
+    
+    # Verify wheel file exists
+    if [ ! -f "$wheel_path" ]; then
+        print_error "Wheel file not found: $wheel_path"
+        return 1
+    fi
     
     local extract_subdir="$EXTRACT_DIR/$platform_dir"
     mkdir -p "$extract_subdir"
     
     print_info "Extracting wheel..."
-    unzip -q "$wheel_path" -d "$extract_subdir"
+    if ! unzip -q -o "$wheel_path" -d "$extract_subdir" 2>/dev/null; then
+        print_error "Failed to extract wheel"
+        return 1
+    fi
     
     # Find and copy libraries
     local target_dir="$NATIVE_DIR/$platform_dir"
@@ -208,12 +209,16 @@ extract_libraries() {
     fi
     
     # Copy all libraries with the correct extension
+    # Use find with -print0 and read with -d '' for handling spaces in filenames
     while IFS= read -r -d '' lib; do
-        local basename=$(basename "$lib")
-        cp "$lib" "$target_dir/"
-        print_success "  Copied: $basename ($(du -h "$lib" | cut -f1))"
-        ((copied++))
-    done < <(find "$extractous_dir" -type f -name "*.$extension*" -print0)
+        if [ -f "$lib" ]; then
+            local basename=$(basename "$lib")
+            cp "$lib" "$target_dir/"
+            local size=$(du -h "$lib" | cut -f1)
+            print_success "  Copied: $basename ($size)"
+            copied=$((copied + 1))
+        fi
+    done < <(find "$extractous_dir" -type f \( -name "*.$extension" -o -name "*.${extension}.*" \) -print0 2>/dev/null)
     
     echo "$copied"
 }
@@ -226,7 +231,8 @@ process_platform() {
     print_section "Processing: $platform_dir (${platform_tag})"
     
     # Get wheel information
-    local wheel_info=$(get_wheel_info "$platform_tag")
+    local wheel_info
+    wheel_info=$(get_wheel_info "$platform_tag")
     
     if [ -z "$wheel_info" ]; then
         print_warning "No wheel found for platform: $platform_tag"
@@ -235,16 +241,46 @@ process_platform() {
     
     IFS='|' read -r filename url sha256 <<< "$wheel_info"
     
+    if [ -z "$filename" ] || [ -z "$url" ] || [ -z "$sha256" ]; then
+        print_error "Invalid wheel info for $platform_tag"
+        return 1
+    fi
+    
     print_info "Filename: $filename"
-    print_info "Size: $(echo "$JSON_DATA" | jq -r --arg fn "$filename" '.urls[] | select(.filename==$fn) | .size' | numfmt --to=iec 2>/dev/null || echo "unknown")"
+    
+    # Get size from JSON
+    local size
+    size=$(echo "$JSON_DATA" | jq -r --arg fn "$filename" '
+        .urls[] | 
+        select(.filename==$fn) | 
+        .size
+    ')
+    
+    if [ -n "$size" ] && [ "$size" != "null" ]; then
+        local size_mb=$((size / 1024 / 1024))
+        print_info "Size: ${size_mb}M"
+    fi
     
     # Download wheel
-    local wheel_path=$(download_wheel "$filename" "$url" "$sha256")
+    local wheel_path
+    if ! wheel_path=$(download_wheel "$filename" "$url" "$sha256"); then
+        print_error "Failed to download wheel for $platform_dir"
+        return 1
+    fi
+    
+
+
+    # Verify wheel path
+    if [ ! -f "$wheel_path" ]; then
+        print_error "Wheel file not accessible: $wheel_path"
+        return 1
+    fi
     
     # Extract libraries
-    local lib_count=$(extract_libraries "$wheel_path" "$platform_dir" "$extension")
+    local lib_count
+    lib_count=$(extract_libraries "$wheel_path" "$platform_dir" "$extension")
     
-    if [ "$lib_count" -gt 0 ]; then
+    if [ -n "$lib_count" ] && [ "$lib_count" -gt 0 ]; then
         print_success "Extracted $lib_count libraries for $platform_dir"
         return 0
     else
@@ -283,9 +319,6 @@ EXAMPLES:
 
     # Clean and extract all
     $0 --clean --all
-
-ENVIRONMENT:
-    EXTRACTOUS_VERSION      Override default version
 EOF
 }
 
@@ -318,7 +351,6 @@ main() {
                 shift
                 ;;
             linux_amd64|darwin_amd64|darwin_arm64|windows_amd64)
-                # Convert platform_dir to platform_tag
                 for tag in "${!PLATFORM_MAP[@]}"; do
                     if [ "${PLATFORM_MAP[$tag]}" = "$1" ]; then
                         platforms_to_extract+=("$tag")
@@ -374,7 +406,7 @@ main() {
     
     for platform_tag in "${platforms_to_extract[@]}"; do
         if process_platform "$platform_tag"; then
-            ((success_count++))
+            success_count=$((success_count + 1))
         else
             failed_platforms+=("${PLATFORM_MAP[$platform_tag]}")
         fi
@@ -398,26 +430,26 @@ main() {
     
     echo ""
     echo "Native libraries structure:"
-    if command -v tree >/dev/null 2>&1; then
-        tree -L 2 "$NATIVE_DIR" || find "$NATIVE_DIR" -type f -name "*.*" | sed "s|$PROJECT_ROOT/||" | sort
-    else
-        find "$NATIVE_DIR" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) | while read -r file; do
-            size=$(du -h "$file" | cut -f1)
-            echo "  $(echo "$file" | sed "s|$PROJECT_ROOT/||") ($size)"
-        done
-    fi
+    
+    for platform_dir in "${PLATFORM_MAP[@]}"; do
+        local native_platform_dir="$NATIVE_DIR/$platform_dir"
+        if [ -d "$native_platform_dir" ]; then
+            echo ""
+            echo "[$platform_dir]"
+            find "$native_platform_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) 2>/dev/null | while read -r file; do
+                local size=$(du -h "$file" | cut -f1)
+                local basename=$(basename "$file")
+                echo "  $basename ($size)"
+            done
+        fi
+    done
     
     echo ""
-    if [ ${#failed_platforms[@]} -eq 0 ]; then
-        print_success "All platforms extracted successfully!"
-        echo ""
-        echo "Next steps:"
-        echo "  make build-ffi      # Build FFI for current platform"
-        echo "  make build-ffi-all  # Build FFI for all platforms"
-    else
-        print_warning "Some platforms failed to extract"
-        exit 1
-    fi
+    print_success "Extraction complete!"
+    echo ""
+    echo "Next steps:"
+    echo "  make build-ffi      # Build FFI for current platform"
+    echo "  make build-ffi-all  # Build FFI for all platforms"
 }
 
 # Run main function

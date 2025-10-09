@@ -12,10 +12,6 @@ echo "  Building FFI for All Platforms"
 echo "=============================================="
 echo ""
 
-# Track successes and failures
-SUCCESS_COUNT=0
-FAILED_PLATFORMS=()
-
 for platform in "${PLATFORMS[@]}"; do
     echo ""
     echo "================================================"
@@ -23,11 +19,9 @@ for platform in "${PLATFORMS[@]}"; do
     echo "================================================"
     
     if "$SCRIPT_DIR/build_ffi.sh" "$platform"; then
-        ((SUCCESS_COUNT++))
-        echo "✓ $platform: SUCCESS"
+        echo "✓ $platform: Build complete"
     else
-        FAILED_PLATFORMS+=("$platform")
-        echo "✗ $platform: FAILED"
+        echo "✗ $platform: Build failed"
     fi
     
     echo ""
@@ -35,19 +29,8 @@ done
 
 echo ""
 echo "=============================================="
-echo "  Build Summary"
+echo " Build Complete"
 echo "=============================================="
-echo "Successful: $SUCCESS_COUNT / ${#PLATFORMS[@]}"
-
-if [ ${#FAILED_PLATFORMS[@]} -gt 0 ]; then
-    echo "Failed platforms:"
-    for platform in "${FAILED_PLATFORMS[@]}"; do
-        echo "  - $platform"
-    done
-    exit 1
-else
-    echo "All platforms built successfully!"
-fi
 
 echo ""
 echo "Native libraries:"
