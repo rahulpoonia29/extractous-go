@@ -1,70 +1,59 @@
-.PHONY: all build clean test install extract-libs copy-libs
+.PHONY: all help setup extract build build-all test clean clean-all check status
 
-# Platform detection
-UNAME_S := $(shell uname -s)
-UNAME_M := $(shell uname -m)
+# Default shell
+SHELL := /bin/bash
 
-ifeq ($(UNAME_S),Linux)
-    OS = linux
-endif
-ifeq ($(UNAME_S),Darwin)
-    OS = darwin
-endif
-ifeq ($(UNAME_M),x86_64)
-    ARCH = amd64
-endif
-ifeq ($(UNAME_M),arm64)
-    ARCH = arm64
-endif
-ifeq ($(UNAME_M),aarch64)
-    ARCH = arm64
-endif
+# Central build script
+BUILD_SCRIPT := ./scripts/build.sh
 
-PLATFORM = $(OS)_$(ARCH)
+all: help
 
-all: build
+help:
+	@$(BUILD_SCRIPT) help
 
-# Extract native libs from Python wheels
-extract-libs:
-	@echo "Extracting native libraries from Python wheels..."
-	./scripts/extract_wheels.sh
+setup:
+	@$(BUILD_SCRIPT) setup
 
-# Build Rust FFI library for current platform
-build-ffi:
-	@echo "Building Rust FFI for $(PLATFORM)..."
-	cd extractous-ffi && cargo build --release
+extract:
+	@$(BUILD_SCRIPT) extract
 
-# Build for all platforms (requires cross-compilation setup)
+build:
+	@$(BUILD_SCRIPT) build
+
 build-all:
-	@echo "Building for all platforms..."
-	./scripts/build_all.sh
+	@$(BUILD_SCRIPT) build-all
 
-# Copy built libraries to Go native/ directory
-copy-libs:
-	@echo "Copying libraries to native/$(PLATFORM)..."
-	./scripts/copy_libs.sh $(PLATFORM)
-
-# Build Go package
-build: build-ffi copy-libs
-	@echo "Building Go package..."
-	go build -v ./...
-
-# Run tests
 test:
-	@echo "Running tests..."
-	go test -v ./...
+	@$(BUILD_SCRIPT) test
 
-# Clean build artifacts
 clean:
-	cd extractous-ffi && cargo clean
-	rm -rf native/
-	go clean
+	@$(BUILD_SCRIPT) clean
 
-# Install Go package
-install:
-	go install ./...
+clean-all:
+	@$(BUILD_SCRIPT) clean-all
 
-# Generate Go documentation
-docs:
-	@echo "Generating documentation..."
-	godoc -http=:6060
+check:
+	@$(BUILD_SCRIPT) check
+
+status:
+	@$(BUILD_SCRIPT) status
+
+# Advanced targets with parameters
+build-platform:
+ifndef PLATFORM
+	$(error PLATFORM is required. Example: make build-platform PLATFORM=darwin_arm64)
+endif
+	@$(BUILD_SCRIPT) build --platform $(PLATFORM)
+
+extract-version:
+ifndef VERSION
+	$(error VERSION is required. Example: make extract-version VERSION=0.2.1)
+endif
+	@$(BUILD_SCRIPT) extract --version $(VERSION)
+
+# Convenience aliases
+rebuild: clean build
+
+rebuild-all: clean build-all
+
+.DEFAULT_GOAL := help
