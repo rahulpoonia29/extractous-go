@@ -76,32 +76,8 @@ jobs:
       #   run: |
       #     brew install wget
 
-      - name: Install GraalVM
-        shell: bash
-        run: |
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            # Windows GraalVM installation
-            curl -L -o graalvm.zip "https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-${{ env.GRAALVM_VERSION }}/graalvm-community-jdk-${{ env.GRAALVM_VERSION }}_windows-x64_bin.zip"
-            unzip graalvm.zip
-            mv graalvm-community-openjdk-${{ env.GRAALVM_VERSION }}* graalvm
-            echo "JAVA_HOME=$(pwd)/graalvm" >> $GITHUB_ENV
-            echo "GRAALVM_HOME=$(pwd)/graalvm" >> $GITHUB_ENV
-            echo "$(pwd)/graalvm/bin" >> $GITHUB_PATH
-          else
-            # Unix-like systems
-            if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-              PLATFORM="linux"
-            else
-              PLATFORM="darwin"
-            fi
-            
-            curl -L -o graalvm.tar.gz "https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-${{ env.GRAALVM_VERSION }}/graalvm-community-jdk-${{ env.GRAALVM_VERSION }}_${PLATFORM}-x64_bin.tar.gz"
-            tar -xzf graalvm.tar.gz
-            mv graalvm-community-openjdk-${{ env.GRAALVM_VERSION }}* graalvm
-            echo "JAVA_HOME=$(pwd)/graalvm" >> $GITHUB_ENV
-            echo "GRAALVM_HOME=$(pwd)/graalvm" >> $GITHUB_ENV
-            echo "$(pwd)/graalvm/bin" >> $GITHUB_PATH
-          fi
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1.4.1
 
       - name: Verify GraalVM installation
         run: |
