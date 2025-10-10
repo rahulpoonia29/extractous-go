@@ -1,0 +1,129 @@
+name: Build extractous-ffi
+
+on:
+  push:
+    branches: [ main, testing-workflow ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "1.90.0"
+  GRAALVM_VERSION: "21.0.0"
+
+jobs:
+  setup-env:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache setup environment
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            ~/.rustup
+            ~/.graalvm
+          key: setup-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ env.GRAALVM_VERSION }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            zip unzip wget curl
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1.4.1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.TOKEN }}
+          native-image-job-reports: 'true'
+
+      - run: |
+          java -version
+          rustc --version
+          echo "Environment Setup complete and cached"
+
+  ffi-build-experiment:
+    needs: setup-env
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            platform: linux_amd64
+            artifact-name: libextractous_ffi.so
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore setup environment cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            ~/.rustup
+            ~/.graalvm
+          key: setup-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ env.GRAALVM_VERSION }}
+
+      - name: Verify environment
+        run: |
+          java -version
+          rustc --version
+          native-image --version || echo "native-image not found"
+
+      - name: Cache Cargo build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cbindgen
+        run: cargo install cbindgen
+
+      - name: Build extractous FFI (experiment)
+        shell: bash
+        run: |
+          set -e
+          echo "Building extractous FFI for ${{ matrix.target }}"
+          BUILD_START_TIME=$(date +%s)
+
+          cargo build --release --target ${{ matrix.target }}
+
+          BUILD_END_TIME=$(date +%s)
+          echo "Build completed in $((BUILD_END_TIME - BUILD_START_TIME))s"
+
+      - name: Prepare distribution
+        run: |
+          mkdir -p dist/${{ matrix.platform }}
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact-name }} dist/${{ matrix.platform }}/ || true
+          cp include/extractous.h dist/${{ matrix.platform }}/ || true
+
+      - name: Verify built library
+        working-directory: dist/${{ matrix.platform }}
+        run: |
+          echo "Verifying library presence..."
+          ls -lh
+          if command -v ldd >/dev/null 2>&1; then
+              ldd libextractous_ffi.so || true
+          fi
+          echo "Verification complete"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractous-ffi-${{ matrix.platform }}
+          path: dist/${{ matrix.platform }}
