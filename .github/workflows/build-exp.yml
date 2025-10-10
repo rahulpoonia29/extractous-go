@@ -14,9 +14,6 @@ env:
 jobs:
   setup-env:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./ffi
     steps:
       - uses: actions/checkout@v4
 
@@ -58,6 +55,9 @@ jobs:
   ffi-build-experiment:
     needs: setup-env
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./ffi
     strategy:
       fail-fast: false
       matrix:
