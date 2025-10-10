@@ -59,18 +59,17 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install system dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-20.04'
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libssl-dev \
-            zip \
-            unzip \
-            wget \
-            curl \
-            ldd
+          build-essential \
+          pkg-config \
+          libssl-dev \
+          zip \
+          unzip \
+          wget \
+          curl
 
       # - name: Install system dependencies (macOS)
       #   if: startsWith(matrix.os, 'macos')
@@ -94,6 +93,13 @@ jobs:
         working-directory: ffi
         shell: bash
         run: |
+          # Show the directory structure
+          echo "General file structure"
+          ls -lhR ./
+
+          echo "Release folder structure"
+          ls -lhR target/${{ matrix.target }}/release/
+          
           BUILD_START_TIME=$(date +%s)
 
           # Build the FFI library
