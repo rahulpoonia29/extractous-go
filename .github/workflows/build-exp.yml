@@ -91,12 +91,13 @@ jobs:
             target
           key: cargo-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install cbindgen
-        run: cargo install cbindgen
+      # - name: Install cbindgen
+      #   run: cargo install cbindgen
 
       - name: Build extractous FFI (experiment)
         shell: bash
         run: |
+          ls -lhR
           set -e
           echo "Building extractous FFI for ${{ matrix.target }}"
           BUILD_START_TIME=$(date +%s)
@@ -116,7 +117,7 @@ jobs:
         working-directory: dist/${{ matrix.platform }}
         run: |
           echo "Verifying library presence..."
-          ls -lh
+          ls -lhR
           if command -v ldd >/dev/null 2>&1; then
               ldd libextractous_ffi.so || true
           fi
