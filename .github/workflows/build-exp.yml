@@ -93,8 +93,17 @@ jobs:
             target
           key: cargo-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
-      # - name: Install cbindgen
-      #   run: cargo install cbindgen
+      - name: Cache Cargo & FFI build artifacts
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            ffi/include/extractous.h
+          key: cargo-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock', 'ffi/build.rs', 'extractous-version.txt') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Build extractous FFI (experiment)
         shell: bash
