@@ -1,190 +1,218 @@
 name: Build extractous-ffi
 
 on:
-  # push:
-  #   branches: [ main, testing-workflow ]
-  # pull_request:
-  #   branches: [ main ]
+  push:
+    branches: [ main, testing-workflow ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 env:
   RUST_VERSION: "1.90.0"
-  GRAALVM_VERSION: "25.0.0"
+  GRAALVM_VERSION: "21.0.0"
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            platform: linux_amd64
-            artifact-name: libextractous_ffi.so
-          # - os: macos-latest
-          #   target: x86_64-apple-darwin
-          #   platform: darwin_amd64
-          #   artifact-name: libextractous_ffi.dylib
-          # - os: macos-latest
-          #   target: aarch64-apple-darwin
-          #   platform: darwin_arm64
-          #   artifact-name: libextractous_ffi.dylib
-          # - os: windows-latest
-          #   target: x86_64-pc-windows-msvc
-          #   platform: windows_amd64
-          #   artifact-name: extractous_ffi.dll
-
+  setup-env:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: actions/checkout@v4
 
-      # Cache extractous build to avoid rebuilding unchanged dependencies
-      - name: Cache extractous build
+      - name: Cache setup environment
         uses: actions/cache@v3
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-            extractous-build
-          key: ${{ runner.os }}-${{ matrix.target }}-extractous-${{ hashFiles('**/Cargo.lock', 'extractous-version.txt') }}
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ~/.rustup
+          key: setup-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ env.GRAALVM_VERSION }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          targets: ${{ matrix.target }}
 
-      - name: Install system dependencies (Ubuntu)
-        if: startsWith(matrix.os, 'ubuntu')
+      - name: Install system dependencies
+          # sudo apt-get update
         run: |
-          sudo apt-get update
           sudo apt-get install -y \
-          build-essential \
-          pkg-config \
-          libssl-dev \
-          zip \
-          unzip \
-          wget \
-          curl
-
-      # - name: Install system dependencies (macOS)
-      #   if: startsWith(matrix.os, 'macos')
-      #   run: |
-      #     brew install wget
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            zip unzip wget curl tree
 
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1.4.1
         with:
-          java-version: '25'
+          java-version: '21'
           distribution: 'graalvm'
-          github-token: ${{ secrets.TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: 'true'
 
-      - name: Verify GraalVM installation
+      - run: |
+          java -version
+          rustc --version
+          echo "Environment Setup complete and cached"
+
+  ffi-build:
+    needs: setup-env
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            platform: linux_amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore setup environment cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ~/.rustup
+          key: setup-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ env.GRAALVM_VERSION }}
+
+      - name: Cache FFI build artifacts
+        uses: actions/cache@v3
+        with:
+          path: |
+            ffi/target
+          key: ffi-build-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock', 'ffi/**/*.rs', 'ffi/build.rs', 'ffi/Cargo.toml') }}
+          restore-keys: |
+            ffi-build-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Fix timestamps after cache restore
+        working-directory: ./ffi
+        run: |
+          # Touch source files and manifests FIRST (so they appear newer)
+          find . -name "*.rs" -exec touch {} + 2>/dev/null || true
+          find . -name "Cargo.toml" -exec touch {} + 2>/dev/null || true
+          find . -name "Cargo.lock" -exec touch {} + 2>/dev/null || true
+          find . -name "build.rs" -exec touch {} + 2>/dev/null || true
+          # Then touch build artifacts (so they appear older than source)
+          find target -type f -exec touch {} + 2>/dev/null || true
+          echo "Timestamps fixed to preserve incremental builds"
+
+      - name: Verify environment
         run: |
           java -version
-          native-image --version
+          rustc --version
 
-      - name: Build FFI library
-        working-directory: ffi
+      - name: Build extractous FFI
+        working-directory: ./ffi
         shell: bash
         run: |
-          # Show the directory structure
-          echo "General file structure"
-          ls -lhR ./
-          
+          set -e
+          echo "Building extractous FFI for ${{ matrix.target }}"
           BUILD_START_TIME=$(date +%s)
 
-          # Build the FFI library
           cargo build --release --target ${{ matrix.target }}
 
           BUILD_END_TIME=$(date +%s)
           BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
-          echo "Build completed successfully in ${BUILD_DURATION} seconds"
+          echo "Build completed in ${BUILD_DURATION}s"
+          echo "BUILD_DURATION=${BUILD_DURATION}" >> $GITHUB_ENV
 
-          # Show the directory structure
-          echo "General file structure"
-          ls -lhR ./
-
-          echo "Release folder structure"
-          ls -lhR target/${{ matrix.target }}/release/
-
-
-      - name: Prepare distribution
+      - name: Verify build outputs
+        working-directory: ./ffi
         shell: bash
         run: |
-          mkdir -p dist/${{ matrix.platform }}
+          echo "=== Build artifacts tree ==="
+          tree -P '*.so' target/${{ matrix.target }}/release/ || find target/${{ matrix.target }}/release/ -name "*.so"
           
-          # Copy the built FFI library
-          cp target/${{ matrix.target }}/release/${{ matrix.artifact-name }} dist/${{ matrix.platform }}/
-          
-          # Copy native dependencies
-          if [ -d "native-deps/${{ matrix.platform }}" ]; then
-            cp -r native-deps/${{ matrix.platform }}/* dist/${{ matrix.platform }}/
-          fi
-          
-          # Copy generated header
-          if [ -f "include/extractous.h" ]; then
-            cp include/extractous.h dist/${{ matrix.platform }}/
-          fi
-          
-          # Create a simple test to verify library loading
-          echo "Creating verification script..."
-          if [[ "${{ matrix.os }}" == "windows-2019" ]]; then
-            cat > dist/${{ matrix.platform }}/verify.bat << 'EOF'
-          @echo off
-          echo Verifying extractous_ffi.dll...
-          where extractous_ffi.dll
-          if %ERRORLEVEL% NEQ 0 (
-              echo ERROR: extractous_ffi.dll not found
-              exit /b 1
-          )
-          echo SUCCESS: Library files present
-          EOF
+          echo -e "\n=== Main library verification ==="
+          MAIN_LIB="target/${{ matrix.target }}/release/libextractous_ffi.so"
+          if [ -f "$MAIN_LIB" ]; then
+            echo "✓ Found main library: $MAIN_LIB"
+            ls -lh "$MAIN_LIB"
+            echo "Checking dependencies:"
+            ldd "$MAIN_LIB" || true
           else
-            cat > dist/${{ matrix.platform }}/verify.sh << 'EOF'
-          #!/bin/bash
-          echo "Verifying library files..."
-          if [[ "$OSTYPE" == "darwin"* ]]; then
-              LIB_FILE="libextractous_ffi.dylib"
-          else
-              LIB_FILE="libextractous_ffi.so"
-          fi
-          
-          if [ ! -f "$LIB_FILE" ]; then
-              echo "ERROR: $LIB_FILE not found"
-              exit 1
-          fi
-          
-          if command -v ldd >/dev/null 2>&1; then
-              echo "Library dependencies:"
-              ldd "$LIB_FILE" || true
-          elif command -v otool >/dev/null 2>&1; then
-              echo "Library dependencies:"
-              otool -L "$LIB_FILE" || true
-          fi
-          
-          echo "SUCCESS: Library files present"
-          EOF
-            chmod +x dist/${{ matrix.platform }}/verify.sh
+            echo "✗ Main library not found: $MAIN_LIB"
+            exit 1
           fi
 
-      - name: Run verification
+          echo -e "\n=== Bundled libraries ==="
+          find target/${{ matrix.target }}/release/build -name "*.so" -type f | head -20
+
+      - name: Collect distribution artifacts
+        working-directory: ./ffi
         shell: bash
-        working-directory: dist/${{ matrix.platform }}
         run: |
-          if [[ "${{ matrix.os }}" == "windows-2019" ]]; then
-            ./verify.bat
-          else
-            ./verify.sh
+          mkdir -p dist/${{ matrix.platform }}/lib
+          
+          # Copy main library
+          cp target/${{ matrix.target }}/release/libextractous_ffi.so \
+             dist/${{ matrix.platform }}/lib/
+          
+          # Copy bundled libraries from build output
+          BUILD_DIR=$(find target/${{ matrix.target }}/release/build -name "extractous-*" -type d | head -1)
+          if [ -d "$BUILD_DIR/out/libs" ]; then
+            echo "Copying bundled libraries from $BUILD_DIR/out/libs"
+            cp -r "$BUILD_DIR/out/libs/"*.so dist/${{ matrix.platform }}/lib/ 2>/dev/null || true
           fi
+          
+          # Copy headers if they exist
+          if [ -d "include" ]; then
+            cp -r include dist/${{ matrix.platform }}/
+          fi
+          
+          echo "=== Distribution contents ==="
+          tree dist/${{ matrix.platform }} || find dist/${{ matrix.platform }}
+          
+          echo "=== Library count ==="
+          find dist/${{ matrix.platform }} -name "*.so" | wc -l
 
-      - name: Upload artifacts
+      - name: Verify distribution artifacts
+        working-directory: ./ffi/dist/${{ matrix.platform }}
+        shell: bash
+        run: |
+          echo "=== Verifying distribution artifacts ==="
+          
+          if [ ! -f "lib/libextractous_ffi.so" ]; then
+            echo "✗ Main library missing from distribution!"
+            exit 1
+          fi
+          
+          echo "✓ Main library present"
+          echo "Library size: $(du -h lib/libextractous_ffi.so | cut -f1)"
+          
+          echo -e "\n=== All libraries in distribution ==="
+          find lib -name "*.so" -type f -exec ls -lh {} \;
+          
+          echo -e "\n=== Total distribution size ==="
+          du -sh .
+
+      - name: Upload FFI distribution artifacts
         uses: actions/upload-artifact@v4
         with:
           name: extractous-ffi-${{ matrix.platform }}
-          path: dist/${{ matrix.platform }}
+          path: ffi/dist/${{ matrix.platform }}
+          retention-days: 30
+          compression-level: 6
+
+      - name: Upload complete target directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractous-ffi-target-${{ matrix.platform }}
+          path: ffi/target/${{ matrix.target }}
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Build summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platform:** ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target:** ${{ matrix.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Duration:** ${BUILD_DURATION}s" >> $GITHUB_STEP_SUMMARY
+          echo "- **Main Library:** \`libextractous_ffi.so\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts Uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "1. \`extractous-ffi-${{ matrix.platform }}\` - Distribution ready libraries" >> $GITHUB_STEP_SUMMARY
+          echo "2. \`extractous-ffi-target-${{ matrix.platform }}\` - Complete build directory" >> $GITHUB_STEP_SUMMARY
