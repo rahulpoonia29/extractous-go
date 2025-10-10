@@ -130,7 +130,7 @@ jobs:
           find include -type f -name "*.h" -exec cp --parents {} dist/linux_amd64/ \; || echo "No .h files found."
 
           echo "Final files:"
-          ls -lhR
+          ls -lhR dist/linux_amd64
 
       # - name: Verify library presence
       #   shell: bash
