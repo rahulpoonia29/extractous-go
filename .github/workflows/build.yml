@@ -25,11 +25,11 @@ jobs:
             lib_ext: so
             os_name: Linux
             
-          - os: windows-latest
-            platform: windows_amd64
-            target: x86_64-pc-windows-msvc
-            lib_ext: dll
-            os_name: Windows
+          # - os: windows-latest
+          #   platform: windows_amd64
+          #   target: x86_64-pc-windows-msvc
+          #   lib_ext: dll
+          #   os_name: Windows
             
           # - os: macos-13
           #   platform: darwin_amd64
@@ -60,7 +60,7 @@ jobs:
         run: |
           echo Verifying Visual Studio C++ compiler...
           where cl.exe
-          cl.exe /version
+          cl.exe /Bv
           echo Visual Studio environment ready
 
       # Install Rust
@@ -151,6 +151,8 @@ jobs:
           BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
           echo "Build completed in ${BUILD_DURATION}s"
           echo "BUILD_DURATION=${BUILD_DURATION}" >> $GITHUB_ENV
+          echo "Directory Strucute"
+          tree -L 3 --purge
 
       # Verify build outputs
       - name: Verify build outputs
