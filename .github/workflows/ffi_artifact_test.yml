@@ -24,12 +24,5 @@ jobs:
         with:
           name: ffi-build
           path: |
-            target/${{ matrix.target }}/release/*.so
+            target/*
             include/extractous.h
-
-      - uses: actions/checkout@v4
-      - name: Download FFI artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: ffi-build
-          path: ./ffi-artifact
