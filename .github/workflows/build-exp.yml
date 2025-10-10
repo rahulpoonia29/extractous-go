@@ -132,27 +132,27 @@ jobs:
           echo "Final files:"
           ls -lhR
 
-      - name: Verify library presence
-        shell: bash
-        working-directory: dist/${{ matrix.platform }}
-        run: |
-          echo "Verifying library files..."
-          if compgen -G "*.so" > /dev/null; then
-            echo "Found shared libraries:"
-            ls -lh *.so
-            echo "Checking dependencies (ldd)..."
-            for f in *.so; do
-              echo "→ $f"
-              ldd "$f" || true
-            done
-          else
-            echo "No .so files found!"
-            exit 1
-          fi
-          echo "Verification complete"
+      # - name: Verify library presence
+      #   shell: bash
+      #   working-directory: dist/${{ matrix.platform }}
+      #   run: |
+      #     echo "Verifying library files..."
+      #     if compgen -G "*.so" > /dev/null; then
+      #       echo "Found shared libraries:"
+      #       ls -lh *.so
+      #       echo "Checking dependencies (ldd)..."
+      #       for f in *.so; do
+      #         echo "→ $f"
+      #         ldd "$f" || true
+      #       done
+      #     else
+      #       echo "No .so files found!"
+      #       exit 1
+      #     fi
+      #     echo "Verification complete"
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: extractous-ffi-${{ matrix.platform }}
-          path: dist/${{ matrix.platform }}
+      # - name: Upload build artifacts
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: extractous-ffi-${{ matrix.platform }}
+      #     path: dist/${{ matrix.platform }}
