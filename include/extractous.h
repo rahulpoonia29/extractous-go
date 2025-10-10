@@ -374,6 +374,15 @@ struct CExtractor *extractous_extractor_set_ocr_config(struct CExtractor *handle
                                                        struct CTesseractOcrConfig *config);
 
 /**
+ * Set whether to output XML structure
+ *
+ * # Safety
+ * - `handle` must be a valid Extractor pointer
+ * - Returns a NEW handle; old handle is consumed
+ */
+struct CExtractor *extractous_extractor_set_xml_output(struct CExtractor *handle, bool xml_output);
+
+/**
  * Extract file content to string
  *
  * # Safety
@@ -452,6 +461,42 @@ int extractous_extractor_extract_bytes(struct CExtractor *handle,
  * - Calling this twice on the same pointer causes undefined behavior
  */
 void extractous_string_free(char *s);
+
+/**
+ * Extract URL content to string
+ *
+ * # Safety
+ * - `handle` must be a valid Extractor pointer
+ * - `url` must be a valid null-terminated UTF-8 string
+ * - `out_content` and `out_metadata` must be valid pointers
+ * - Caller must free returned content with `extractous_string_free`
+ * - Caller must free returned metadata with `extractous_metadata_free`
+ *
+ * # Returns
+ * ERR_OK on success, error code on failure.
+ */
+int extractous_extractor_extract_url_to_string(struct CExtractor *handle,
+                                               const char *url,
+                                               char **out_content,
+                                               struct CMetadata **out_metadata);
+
+/**
+ * Extract URL content to stream
+ *
+ * # Safety
+ * - `handle` must be a valid Extractor pointer
+ * - `url` must be a valid null-terminated UTF-8 string
+ * - `out_reader` and `out_metadata` must be valid pointers
+ * - Caller must free returned reader with `extractous_stream_free`
+ * - Caller must free returned metadata with `extractous_metadata_free`
+ *
+ * # Returns
+ * ERR_OK on success, error code on failure.
+ */
+int extractous_extractor_extract_url(struct CExtractor *handle,
+                                     const char *url,
+                                     struct CStreamReader **out_reader,
+                                     struct CMetadata **out_metadata);
 
 /**
  * Free metadata structure

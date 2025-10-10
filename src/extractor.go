@@ -83,6 +83,16 @@ func (e *Extractor) SetOcrConfig(config *OcrConfig) *Extractor {
 	return e
 }
 
+// SetXmlOutput sets whether to output XML structure instead of plain text
+func (e *Extractor) SetXmlOutput(xmlOutput bool) *Extractor {
+	newPtr := C.extractous_extractor_set_xml_output(e.ptr, C.bool(xmlOutput))
+	if newPtr == nil {
+		return nil
+	}
+	e.ptr = newPtr
+	return e
+}
+
 // ExtractFileToString extracts a file's content to a string
 func (e *Extractor) ExtractFileToString(path string) (content string, metadata Metadata, err error) {
 	cPath := cString(path)
@@ -172,6 +182,46 @@ func (e *Extractor) ExtractBytes(data []byte) (reader *StreamReader, metadata Me
 
 	reader = newStreamReader(cReader)
 	metadata = newMetadata(cMeta)
+	return reader, metadata, nil
+}
+
+// ExtractUrlToString extracts content from a URL to a string
+func (e *Extractor) ExtractUrlToString(url string) (content string, metadata Metadata, err error) {
+	cUrl := cString(url)
+	defer freeString(cUrl)
+
+	var cContent *C.char
+	var cMeta *C.struct_CMetadata
+
+	code := C.extractous_extractor_extract_url_to_string(e.ptr, cUrl, &cContent, &cMeta)
+	if code != errOK {
+		return "", nil, newError(code)
+	}
+
+	content = goString(cContent)
+	C.extractous_string_free(cContent)
+
+	metadata = newMetadata(cMeta)
+
+	return content, metadata, nil
+}
+
+// ExtractUrl extracts content from a URL as a streaming reader
+func (e *Extractor) ExtractUrl(url string) (reader *StreamReader, metadata Metadata, err error) {
+	cUrl := cString(url)
+	defer freeString(cUrl)
+
+	var cReader *C.struct_CStreamReader
+	var cMeta *C.struct_CMetadata
+
+	code := C.extractous_extractor_extract_url(e.ptr, cUrl, &cReader, &cMeta)
+	if code != errOK {
+		return nil, nil, newError(code)
+	}
+
+	reader = newStreamReader(cReader)
+	metadata = newMetadata(cMeta)
+
 	return reader, metadata, nil
 }
 

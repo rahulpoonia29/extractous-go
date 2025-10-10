@@ -7,6 +7,7 @@ package src
 import "C"
 import (
 	"runtime"
+	"strings"
 	"unsafe"
 )
 
@@ -44,9 +45,13 @@ func newMetadata(cMeta *C.struct_CMetadata) Metadata {
 		key := C.GoString(keys[i])
 		value := C.GoString(values[i])
 
-		// Values are comma-separated in C
-		// Split them into slice (simple implementation)
-		result[key] = []string{value}
+		// Values are comma-separated in C, split them into individual values
+		valueSlice := strings.Split(value, ",")
+		// Trim whitespace from each value
+		for j := range valueSlice {
+			valueSlice[j] = strings.TrimSpace(valueSlice[j])
+		}
+		result[key] = valueSlice
 	}
 
 	return result

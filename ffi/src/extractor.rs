@@ -153,6 +153,25 @@ pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
     Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
 }
 
+/// Set whether to output XML structure
+///
+/// # Safety
+/// - `handle` must be a valid Extractor pointer
+/// - Returns a NEW handle; old handle is consumed
+#[no_mangle]
+pub unsafe extern "C" fn extractous_extractor_set_xml_output(
+    handle: *mut CExtractor,
+    xml_output: bool,
+) -> *mut CExtractor {
+    if handle.is_null() {
+        return ptr::null_mut();
+    }
+
+    let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
+    let new_extractor = old_extractor.set_xml_output(xml_output);
+    Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
+}
+
 // ============================================================================
 // Extraction Functions
 // ============================================================================
@@ -332,5 +351,98 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes(
 pub unsafe extern "C" fn extractous_string_free(s: *mut c_char) {
     if !s.is_null() {
         drop(CString::from_raw(s));
+    }
+}
+
+// ============================================================================
+// URL Extraction Functions
+// ============================================================================
+
+/// Extract URL content to string
+///
+/// # Safety
+/// - `handle` must be a valid Extractor pointer
+/// - `url` must be a valid null-terminated UTF-8 string
+/// - `out_content` and `out_metadata` must be valid pointers
+/// - Caller must free returned content with `extractous_string_free`
+/// - Caller must free returned metadata with `extractous_metadata_free`
+///
+/// # Returns
+/// ERR_OK on success, error code on failure.
+#[no_mangle]
+pub unsafe extern "C" fn extractous_extractor_extract_url_to_string(
+    handle: *mut CExtractor,
+    url: *const c_char,
+    out_content: *mut *mut c_char,
+    out_metadata: *mut *mut CMetadata,
+) -> libc::c_int {
+    // Null pointer checks
+    if handle.is_null() || url.is_null() || out_content.is_null() || out_metadata.is_null() {
+        return ERR_NULL_POINTER;
+    }
+
+    // Convert C string to Rust str
+    let url_str = match CStr::from_ptr(url).to_str() {
+        Ok(s) => s,
+        Err(_) => return ERR_INVALID_UTF8,
+    };
+
+    // Get reference to extractor
+    let extractor = &*(handle as *mut CoreExtractor);
+
+    // Perform extraction
+    match extractor.extract_url_to_string(url_str) {
+        Ok((content, metadata)) => {
+            // Convert content to C string
+            *out_content = match CString::new(content) {
+                Ok(s) => s.into_raw(),
+                Err(_) => return ERR_INVALID_STRING,
+            };
+
+            // Convert metadata to C structure
+            *out_metadata = metadata_to_c(metadata);
+
+            ERR_OK
+        }
+        Err(e) => extractous_error_to_code(&e),
+    }
+}
+
+/// Extract URL content to stream
+///
+/// # Safety
+/// - `handle` must be a valid Extractor pointer
+/// - `url` must be a valid null-terminated UTF-8 string
+/// - `out_reader` and `out_metadata` must be valid pointers
+/// - Caller must free returned reader with `extractous_stream_free`
+/// - Caller must free returned metadata with `extractous_metadata_free`
+///
+/// # Returns
+/// ERR_OK on success, error code on failure.
+#[no_mangle]
+pub unsafe extern "C" fn extractous_extractor_extract_url(
+    handle: *mut CExtractor,
+    url: *const c_char,
+    out_reader: *mut *mut CStreamReader,
+    out_metadata: *mut *mut CMetadata,
+) -> libc::c_int {
+    if handle.is_null() || url.is_null() || out_reader.is_null() || out_metadata.is_null() {
+        return ERR_NULL_POINTER;
+    }
+
+    let url_str = match CStr::from_ptr(url).to_str() {
+        Ok(s) => s,
+        Err(_) => return ERR_INVALID_UTF8,
+    };
+
+    let extractor = &*(handle as *mut CoreExtractor);
+
+    match extractor.extract_url(url_str) {
+        Ok((reader, metadata)) => {
+            *out_reader = Box::into_raw(Box::new(reader)) as *mut CStreamReader;
+            *out_metadata = metadata_to_c(metadata);
+            ERR_OK
+        }
+        Err(e) => extractous_error_to_code(&e),
     }
 }
