@@ -158,8 +158,8 @@ jobs:
       - name: Verify build outputs
         shell: bash
         run: |
-          chmod +x ./.github/scripts/verify-build.sh
-          ./.github/scripts/verify-build.sh \
+          chmod +x ./.github/workflows/scripts/verify-build.sh
+          ./.github/workflows/scripts/verify-build.sh \
             "${{ matrix.target }}" \
             "${{ matrix.lib_ext }}" \
             "${{ matrix.os_name }}"
@@ -168,8 +168,8 @@ jobs:
       - name: Collect distribution artifacts
         shell: bash
         run: |
-          chmod +x ./.github/scripts/collect-dependencies.sh
-          ./.github/scripts/collect-dependencies.sh \
+          chmod +x ./.github/workflows/scripts/collect-dependencies.sh
+          ./.github/workflows/scripts/collect-dependencies.sh \
             "${{ matrix.platform }}" \
             "${{ matrix.target }}" \
             "${{ matrix.lib_ext }}" \
@@ -179,8 +179,8 @@ jobs:
       - name: Verify distribution artifacts
         shell: bash
         run: |
-          chmod +x ./.github/scripts/verify-distribution.sh
-          ./.github/scripts/verify-distribution.sh \
+          chmod +x ./.github/workflows/scripts/verify-distribution.sh
+          ./.github/workflows/scripts/verify-distribution.sh \
             "${{ matrix.platform }}" \
             "${{ matrix.lib_ext }}"
 
