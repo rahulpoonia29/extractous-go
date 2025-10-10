@@ -108,27 +108,29 @@ jobs:
       - name: Build extractous FFI (experiment)
         shell: bash
         run: |
-          tree -P '*.(so|rs)' --prune .
+          tree -P '*.so|*.rs' --prune .
 
           set -e
           echo "Building extractous FFI for ${{ matrix.target }}"
           BUILD_START_TIME=$(date +%s)
 
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }} --quiet
 
           BUILD_END_TIME=$(date +%s)
           echo "Build completed in $((BUILD_END_TIME - BUILD_START_TIME))s"
 
-          tree -P '*.(so|rs)' --prune .
+          tree -P '*.so|*.rs' --prune .
 
       - name: Collect built shared libraries
         run: |
           mkdir -p dist/linux_amd64
           echo "Collecting all .so libraries into dist/linux_amd64..."
-          find target -type f -name "*.so" -exec cp --parents {} dist/linux_amd64/ \;
-          find include -type f -name "*.h" -exec cp --parents {} dist/linux_amd64/ \;
+
+          find target -type f -name "*.so" -exec cp --parents {} dist/linux_amd64/ \; || echo "No .so files found."
+          find include -type f -name "*.h" -exec cp --parents {} dist/linux_amd64/ \; || echo "No .h files found."
+
           echo "Final files:"
-          ls -lhR dist/linux_amd64
+          ls -lhR
 
       - name: Verify library presence
         shell: bash
