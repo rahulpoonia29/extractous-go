@@ -30,10 +30,10 @@ jobs:
           #   target: aarch64-apple-darwin
           #   platform: darwin_arm64
           #   artifact-name: libextractous_ffi.dylib
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            platform: windows_amd64
-            artifact-name: extractous_ffi.dll
+          # - os: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   platform: windows_amd64
+          #   artifact-name: extractous_ffi.dll
 
     steps:
       - name: Checkout code
@@ -90,10 +90,8 @@ jobs:
           java -version
           native-image --version
 
-      - name: Install cbindgen & extractous
-        run: cargo install cbindgen, extractous
-
       - name: Build FFI library
+        working-directory: ffi
         shell: bash
         run: |
           BUILD_START_TIME=$(date +%s)
