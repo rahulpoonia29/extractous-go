@@ -15,7 +15,7 @@ echo "OS: $OS"
 echo ""
 
 echo "=== Main library verification ==="
-MAIN_LIB="target/$TARGET/release/libextractous_ffi.$LIB_EXT"
+MAIN_LIB="./ffi/target/$TARGET/release/libextractous_ffi.$LIB_EXT"
 
 if [ -f "$MAIN_LIB" ]; then
   echo "✓ Found main library: $MAIN_LIB"

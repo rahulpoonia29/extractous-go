@@ -19,7 +19,7 @@ echo ""
 mkdir -p "dist/$PLATFORM/lib"
 
 # Find the extractous build directory
-BUILD_DIR=$(find "target/$TARGET/release/build" -maxdepth 1 -name "extractous-*" -type d | head -1)
+BUILD_DIR=$(find "./ffi/target/$TARGET/release/build" -maxdepth 1 -name "extractous-*" -type d | head -1)
 
 if [ -z "$BUILD_DIR" ]; then
   echo "Error: Could not find extractous build directory"
@@ -30,7 +30,7 @@ echo "Using build directory: $BUILD_DIR"
 
 # Define paths to search for custom libraries
 SEARCH_PATHS=(
-  "target/$TARGET/release"
+  "./ffi/target/$TARGET/release"
   "$BUILD_DIR/out/tika-native/build/native/nativeCompile"
   "$BUILD_DIR/out/libs"
 )
