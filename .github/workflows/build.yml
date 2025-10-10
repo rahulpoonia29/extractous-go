@@ -2,44 +2,64 @@ name: Build extractous-ffi
 
 on:
   push:
-    branches: [ main, testing-workflow ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 env:
   RUST_VERSION: "1.90.0"
-  GRAALVM_VERSION: "21.0.0"
 
 jobs:
-  setup-env:
-    runs-on: ubuntu-latest
+  ffi-build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux_amd64
+            target: x86_64-unknown-linux-gnu
+            lib_ext: so
+            os_name: Linux
+            
+          - os: windows-latest
+            platform: windows_amd64
+            target: x86_64-pc-windows-msvc
+            lib_ext: dll
+            os_name: Windows
+            
+          # - os: macos-13
+          #   platform: darwin_amd64
+          #   target: x86_64-apple-darwin
+          #   lib_ext: dylib
+          #   os_name: macOS
+            
+          # - os: macos-latest
+          #   platform: darwin_arm64
+          #   target: aarch64-apple-darwin
+          #   lib_ext: dylib
+          #   os_name: macOS
+
     steps:
       - uses: actions/checkout@v4
-
-      - name: Cache setup environment
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            ~/.rustup
-          key: setup-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ env.GRAALVM_VERSION }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.target }}
 
-      - name: Install system dependencies
-          # sudo apt-get update
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libssl-dev \
-            zip unzip wget curl tree
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev tree
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tree
 
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1.4.1
@@ -49,38 +69,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: 'true'
 
-      - run: |
-          java -version
-          rustc --version
-          echo "Environment Setup complete and cached"
-
-  ffi-build:
-    needs: setup-env
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            platform: linux_amd64
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Restore setup environment cache
+      - name: Cache FFI build artifacts
         uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            ~/.rustup
-          key: setup-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ env.GRAALVM_VERSION }}
-
-      - name: Cache FFI build artifacts
-        uses: actions/cache@v3
-        with:
-          path: |
             ffi/target
           key: ffi-build-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock', 'ffi/**/*.rs', 'ffi/build.rs', 'ffi/Cargo.toml') }}
           restore-keys: |
@@ -88,236 +83,63 @@ jobs:
 
       - name: Fix timestamps after cache restore
         working-directory: ./ffi
+        shell: bash
         run: |
-          # Touch source files and manifests FIRST (so they appear newer)
           find . -name "*.rs" -exec touch {} + 2>/dev/null || true
           find . -name "Cargo.toml" -exec touch {} + 2>/dev/null || true
           find . -name "Cargo.lock" -exec touch {} + 2>/dev/null || true
           find . -name "build.rs" -exec touch {} + 2>/dev/null || true
-          # Then touch build artifacts (so they appear older than source)
           find target -type f -exec touch {} + 2>/dev/null || true
-          echo "Timestamps fixed to preserve incremental builds"
 
       - name: Verify environment
+        shell: bash
         run: |
           java -version
           rustc --version
+          echo "Target: ${{ matrix.target }}"
+          echo "Platform: ${{ matrix.platform }}"
 
       - name: Build extractous FFI
         working-directory: ./ffi
         shell: bash
         run: |
           set -e
-          echo "Building extractous FFI for ${{ matrix.target }}"
           BUILD_START_TIME=$(date +%s)
-
           cargo build --release --target ${{ matrix.target }} --quiet
-
           BUILD_END_TIME=$(date +%s)
           BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
           echo "Build completed in ${BUILD_DURATION}s"
           echo "BUILD_DURATION=${BUILD_DURATION}" >> $GITHUB_ENV
 
-
       - name: Verify build outputs
         working-directory: ./ffi
         shell: bash
         run: |
-          set +e  # Don't fail on pipe errors
-          
-          echo "=== Build artifacts tree ==="
-          tree -P '*.so' target/${{ matrix.target }}/release/ --purge 2>/dev/null || find target/${{ matrix.target }}/release/ -name "*.so" | head -30 || true
-          
-          echo -e "\n=== Main library verification ==="
-          MAIN_LIB="target/${{ matrix.target }}/release/libextractous_ffi.so"
-          if [ -f "$MAIN_LIB" ]; then
-            echo "✓ Found main library: $MAIN_LIB"
-            ls -lh "$MAIN_LIB"
-            echo "Checking dependencies:"
-            ldd "$MAIN_LIB" || true
-          else
-            echo "✗ Main library not found: $MAIN_LIB"
-            exit 1
-          fi
+          chmod +x ../.github/scripts/verify-build.sh
+          ../.github/scripts/verify-build.sh \
+            "${{ matrix.target }}" \
+            "${{ matrix.lib_ext }}" \
+            "${{ matrix.os_name }}"
 
-          echo -e "\n=== Bundled libraries count ==="
-          TIKA_COUNT=$(find target/${{ matrix.target }}/release/build -path "*/tika-native/build/native/nativeCompile/*.so" -type f 2>/dev/null | wc -l)
-          GRAALVM_COUNT=$(find target/${{ matrix.target }}/release/build -path "*/graalvm-jdk/*/lib/*.so" -type f 2>/dev/null | wc -l)
-          echo "Tika native libraries: $TIKA_COUNT"
-          echo "GraalVM libraries: $GRAALVM_COUNT"
-          echo "Total bundled: $((TIKA_COUNT + GRAALVM_COUNT))"
-
-      - name: Collect distribution artifacts (smart recursive)
+      - name: Collect distribution artifacts
         working-directory: ./ffi
         shell: bash
         run: |
-          set -e
-          
-          mkdir -p dist/${{ matrix.platform }}/lib
-          
-          # Find the extractous build directory
-          BUILD_DIR=$(find target/${{ matrix.target }}/release/build -maxdepth 1 -name "extractous-*" -type d | head -1)
-          
-          if [ -z "$BUILD_DIR" ]; then
-            echo "Error: Could not find extractous build directory"
-            exit 1
-          fi
-          
-          echo "Using build directory: $BUILD_DIR"
-          
-          # Define paths to search for custom libraries
-          SEARCH_PATHS=(
-            "target/${{ matrix.target }}/release"
-            "$BUILD_DIR/out/tika-native/build/native/nativeCompile"
-            "$BUILD_DIR/out/libs"
-            "$BUILD_DIR/out/graalvm-jdk/graalvm-community-openjdk-23.0.1+11.1/lib"
-          )
-          
-          # System library paths to exclude
-          SYSTEM_PATHS=(
-            "/lib/"
-            "/usr/lib/"
-            "/lib64/"
-            "/usr/lib64/"
-            "linux-vdso"
-            "ld-linux"
-          )
-          
-          # Function to check if a library path is a system library
-          is_system_lib() {
-            local lib_path="$1"
-            for sys_path in "${SYSTEM_PATHS[@]}"; do
-              if [[ "$lib_path" == *"$sys_path"* ]]; then
-                return 0  # Is system lib
-              fi
-            done
-            return 1  # Not system lib
-          }
-          
-          # Function to find a library in our search paths
-          find_custom_lib() {
-            local lib_name="$1"
-            for search_path in "${SEARCH_PATHS[@]}"; do
-              if [ -f "$search_path/$lib_name" ]; then
-                echo "$search_path/$lib_name"
-                return 0
-              fi
-              # Also search recursively in subdirectories
-              local found=$(find "$search_path" -name "$lib_name" -type f 2>/dev/null | head -1)
-              if [ -n "$found" ]; then
-                echo "$found"
-                return 0
-              fi
-            done
-            return 1
-          }
-          
-          # Array to track processed libraries (avoid duplicates)
-          declare -A processed_libs
-          
-          # Function to recursively collect dependencies
-          collect_deps() {
-            local lib_path="$1"
-            local lib_name=$(basename "$lib_path")
-            
-            # Skip if already processed
-            if [[ -n "${processed_libs[$lib_name]}" ]]; then
-              return
-            fi
-            
-            echo "Processing: $lib_name"
-            processed_libs[$lib_name]=1
-            
-            # Copy the library
-            cp "$lib_path" dist/${{ matrix.platform }}/lib/
-            echo "  ✓ Copied: $lib_name"
-            
-            # Get dependencies using ldd
-            local deps=$(ldd "$lib_path" 2>/dev/null | grep '=>' | awk '{print $1, $3}')
-            
-            while IFS= read -r line; do
-              if [ -z "$line" ]; then
-                continue
-              fi
-              
-              local dep_name=$(echo "$line" | awk '{print $1}')
-              local dep_path=$(echo "$line" | awk '{print $2}')
-              
-              # Skip if no path found (not found dependency)
-              if [ "$dep_path" = "" ] || [ "$dep_path" = "not" ]; then
-                continue
-              fi
-              
-              # Skip system libraries
-              if is_system_lib "$dep_path"; then
-                echo "  - Skipping system lib: $dep_name"
-                continue
-              fi
-              
-              # Try to find this library in our custom paths
-              local custom_lib=$(find_custom_lib "$dep_name")
-              if [ -n "$custom_lib" ]; then
-                echo "  → Found custom dependency: $dep_name"
-                collect_deps "$custom_lib"  # Recursively process
-              else
-                echo "  ! Dependency $dep_name not in build dir (external: $dep_path)"
-              fi
-            done <<< "$deps"
-          }
-          
-          # Start from the main library
-          MAIN_LIB="target/${{ matrix.target }}/release/libextractous_ffi.so"
-          
-          echo "=== Starting recursive dependency collection ==="
-          echo "Main library: $MAIN_LIB"
-          echo ""
-          
-          collect_deps "$MAIN_LIB"
-          
-          echo ""
-          echo "=== Collection complete ==="
-          echo "Libraries collected:"
-          ls -1 dist/${{ matrix.platform }}/lib/
-          
-          echo ""
-          echo "=== Library details ==="
-          ls -lh dist/${{ matrix.platform }}/lib/
-          
-          echo ""
-          echo "=== Total size ==="
-          du -sh dist/${{ matrix.platform }}/lib/
-          
-          # Copy headers if they exist
-          if [ -d "include" ]; then
-            echo ""
-            echo "Copying header files..."
-            cp -r include dist/${{ matrix.platform }}/
-          fi
-
+          chmod +x ../.github/scripts/collect-dependencies.sh
+          ../.github/scripts/collect-dependencies.sh \
+            "${{ matrix.platform }}" \
+            "${{ matrix.target }}" \
+            "${{ matrix.lib_ext }}" \
+            "${{ matrix.os_name }}"
 
       - name: Verify distribution artifacts
-        working-directory: ./ffi/dist/${{ matrix.platform }}
+        working-directory: ./ffi
         shell: bash
         run: |
-          set -e
-          echo "=== Verifying distribution artifacts ==="
-          
-          if [ ! -f "lib/libextractous_ffi.so" ]; then
-            echo "✗ Main library missing from distribution!"
-            exit 1
-          fi
-          
-          echo "✓ Main library present"
-          echo "Library size: $(du -h lib/libextractous_ffi.so | cut -f1)"
-          
-          echo -e "\n=== All libraries in distribution ==="
-          find lib -name "*.so" -type f -exec basename {} \; | sort
-          
-          echo -e "\n=== Library details ==="
-          ls -lh lib/*.so
-          
-          echo -e "\n=== Total distribution size ==="
-          du -sh .
+          chmod +x ../.github/scripts/verify-distribution.sh
+          ../.github/scripts/verify-distribution.sh \
+            "${{ matrix.platform }}" \
+            "${{ matrix.lib_ext }}"
 
       - name: Upload FFI distribution artifacts
         uses: actions/upload-artifact@v4
@@ -328,13 +150,45 @@ jobs:
           compression-level: 6
 
       - name: Build summary
+        shell: bash
         run: |
-          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Build Summary - ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Platform:** ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Target:** ${{ matrix.target }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build Duration:** ${BUILD_DURATION}s" >> $GITHUB_STEP_SUMMARY
-          echo "- **Main Library:** \`libextractous_ffi.so\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Artifacts Uploaded" >> $GITHUB_STEP_SUMMARY
-          echo "1. \`extractous-ffi-${{ matrix.platform }}\` - Distribution ready libraries" >> $GITHUB_STEP_SUMMARY
-          echo "2. \`extractous-ffi-target-${{ matrix.platform }}\` - Complete build directory" >> $GITHUB_STEP_SUMMARY
+          echo "- **Library Extension:** .${{ matrix.lib_ext }}" >> $GITHUB_STEP_SUMMARY
+
+  create-release:
+    name: Create Release Bundle
+    needs: ffi-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Create combined archives
+        shell: bash
+        run: |
+          cd artifacts
+          for platform in linux_amd64 windows_amd64 darwin_amd64 darwin_arm64; do
+            if [ -d "extractous-ffi-$platform" ]; then
+              cd "extractous-ffi-$platform"
+              tar czf "../extractous-ffi-$platform.tar.gz" .
+              cd ..
+              echo "✓ Created archive for $platform"
+            fi
+          done
+          ls -lh *.tar.gz
+      
+      - name: Upload combined artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractous-ffi-all-platforms
+          path: artifacts/*.tar.gz
+          retention-days: 90
