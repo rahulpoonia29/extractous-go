@@ -2,7 +2,7 @@ name: Build extractous-ffi
 
 on:
   push:
-    branches: [ main, testing-workflow ]
+    # branches: [ main, testing-workflow ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:

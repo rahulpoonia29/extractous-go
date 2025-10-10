@@ -3,26 +3,63 @@ name: Upload extractous-ffi
 on:
   push:
     branches: [ main, testing-workflow ]
-  # pull_request:
-  #   branches: [ main ]
   workflow_dispatch:
 
+env:
+  RUST_VERSION: "1.90.0"
+
 jobs:
-  build-ffi:
+  upload-ffi-cache:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./ffi
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            platform: linux_amd64
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Restore FFI cache
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Restore Cargo & FFI build cache
         uses: actions/cache@v3
         with:
-          path: target
-          key: ffi-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock', 'ffi/build.rs') }}
-      - name: Build FFI
-        run: cargo build --release --target ${{ matrix.target }}
-      - name: Save FFI artifact
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            ffi/include/extractous.h
+          key: cargo-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock', 'ffi/build.rs', 'extractous-version.txt') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Build extractous FFI
+        shell: bash
+        run: |
+          echo "Building extractous FFI for ${{ matrix.target }}"
+          cargo build --release --target ${{ matrix.target }}
+          echo "Build complete."
+
+      - name: Collect build artifacts
+        shell: bash
+        run: |
+          mkdir -p dist/${{ matrix.platform }}
+          find target/${{ matrix.target }}/release -type f -name "*.so" -exec cp {} dist/${{ matrix.platform }}/ \; || echo "No shared libs found."
+          cp -r include dist/${{ matrix.platform }}/ 2>/dev/null || true
+          echo "Collected artifacts:"
+          ls -lhR dist/${{ matrix.platform }}
+
+      - name: Upload FFI build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ffi-build
-          path: |
-            target/*
-            include/extractous.h
+          name: extractous-ffi-${{ matrix.platform }}
+          path: dist/${{ matrix.platform }}
