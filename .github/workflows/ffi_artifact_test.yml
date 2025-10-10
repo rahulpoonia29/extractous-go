@@ -1,8 +1,8 @@
 name: Upload extractous-ffi
 
 on:
-  push:
-    branches: [ main, testing-workflow ]
+  # push:
+    # branches: [ main, testing-workflow ]
   workflow_dispatch:
 
 env:
@@ -42,12 +42,14 @@ jobs:
           restore-keys: |
             cargo-${{ runner.os }}-${{ matrix.target }}-
 
-      - name: Build extractous FFI
-        shell: bash
-        run: |
-          echo "Building extractous FFI for ${{ matrix.target }}"
-          cargo build --release --target ${{ matrix.target }}
-          echo "Build complete."
+        
+
+      # - name: Build extractous FFI
+      #   shell: bash
+      #   run: |
+      #     echo "Building extractous FFI for ${{ matrix.target }}"
+      #     cargo build --release --target ${{ matrix.target }}
+      #     echo "Build complete."
 
       - name: Collect build artifacts
         shell: bash

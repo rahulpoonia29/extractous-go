@@ -2,7 +2,7 @@ name: Build extractous-ffi
 
 on:
   push:
-    # branches: [ main, testing-workflow ]
+    branches: [ main, testing-workflow ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -52,7 +52,7 @@ jobs:
           rustc --version
           echo "Environment Setup complete and cached"
 
-  ffi-build-experiment:
+  ffi-build:
     needs: setup-env
     runs-on: ubuntu-latest
     defaults:
@@ -105,7 +105,7 @@ jobs:
           restore-keys: |
             cargo-${{ runner.os }}-${{ matrix.target }}-
 
-      - name: Build extractous FFI (experiment)
+      - name: Build extractous FFI
         shell: bash
         run: |
           tree -P '*.so|*.rs' --prune .
@@ -121,6 +121,27 @@ jobs:
 
           tree -P '*.so|*.rs' --prune .
 
+      - name: Collect build artifacts
+        shell: bash
+        run: |
+          mkdir -p dist/${{ matrix.platform }}
+          find target/${{ matrix.target }}/release -type f -name "*.so" -exec cp {} dist/${{ matrix.platform }}/ \; || echo "No shared libs found."
+          cp -r include dist/${{ matrix.platform }}/ 2>/dev/null || true
+          echo "Collected artifacts:"
+          ls -lhR dist/${{ matrix.platform }}
+
+      - name: Upload FFI build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractous-ffi-${{ matrix.platform }}
+          path: dist/${{ matrix.platform }}
+
+      - name: Upload FFI target directory artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractous-ffi-target-${{ matrix.platform }}
+          path: dist/${{ matrix.platform }}
+
       - name: Collect built shared libraries
         run: |
           mkdir -p dist/linux_amd64
@@ -130,7 +151,7 @@ jobs:
           find include -type f -name "*.h" -exec cp --parents {} dist/linux_amd64/ \; || echo "No .h files found."
 
           echo "Final files:"
-          ls -lhR dist/linux_amd64
+          tree ./dist/linux_amd64
 
       # - name: Verify library presence
       #   shell: bash
