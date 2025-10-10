@@ -152,67 +152,64 @@ jobs:
           echo "Build completed in ${BUILD_DURATION}s"
           echo "BUILD_DURATION=${BUILD_DURATION}" >> $GITHUB_ENV
           echo "Directory Strucute"
-          tree -L 3 --prune
+          tree --prune -P "*.so|*.ru"
 
-  #     # Verify build outputs
-  #     - name: Verify build outputs
-  #       working-directory: ./ffi
-  #       shell: bash
-  #       run: |
-  #         chmod +x ../.github/scripts/verify-build.sh
-  #         ../.github/scripts/verify-build.sh \
-  #           "${{ matrix.target }}" \
-  #           "${{ matrix.lib_ext }}" \
-  #           "${{ matrix.os_name }}"
+      # Verify build outputs
+      - name: Verify build outputs
+        shell: bash
+        run: |
+          chmod +x ./.github/scripts/verify-build.sh
+          ./.github/scripts/verify-build.sh \
+            "${{ matrix.target }}" \
+            "${{ matrix.lib_ext }}" \
+            "${{ matrix.os_name }}"
 
-  #     # Collect distribution artifacts with smart dependency resolution
-  #     - name: Collect distribution artifacts
-  #       working-directory: ./ffi
-  #       shell: bash
-  #       run: |
-  #         chmod +x ../.github/scripts/collect-dependencies.sh
-  #         ../.github/scripts/collect-dependencies.sh \
-  #           "${{ matrix.platform }}" \
-  #           "${{ matrix.target }}" \
-  #           "${{ matrix.lib_ext }}" \
-  #           "${{ matrix.os_name }}"
+      # Collect distribution artifacts with smart dependency resolution
+      - name: Collect distribution artifacts
+        shell: bash
+        run: |
+          chmod +x ./.github/scripts/collect-dependencies.sh
+          ./.github/scripts/collect-dependencies.sh \
+            "${{ matrix.platform }}" \
+            "${{ matrix.target }}" \
+            "${{ matrix.lib_ext }}" \
+            "${{ matrix.os_name }}"
 
-  #     # Verify distribution artifacts
-  #     - name: Verify distribution artifacts
-  #       working-directory: ./ffi
-  #       shell: bash
-  #       run: |
-  #         chmod +x ../.github/scripts/verify-distribution.sh
-  #         ../.github/scripts/verify-distribution.sh \
-  #           "${{ matrix.platform }}" \
-  #           "${{ matrix.lib_ext }}"
+      # Verify distribution artifacts
+      - name: Verify distribution artifacts
+        shell: bash
+        run: |
+          chmod +x ./.github/scripts/verify-distribution.sh
+          ./.github/scripts/verify-distribution.sh \
+            "${{ matrix.platform }}" \
+            "${{ matrix.lib_ext }}"
 
-  #     # Upload distribution artifacts
-  #     - name: Upload FFI distribution artifacts
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: extractous-ffi-${{ matrix.platform }}
-  #         path: ffi/dist/${{ matrix.platform }}
-  #         retention-days: 30
-  #         compression-level: 6
+      # Upload distribution artifacts
+      - name: Upload FFI distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractous-ffi-${{ matrix.platform }}
+          path: ffi/dist/${{ matrix.platform }}
+          retention-days: 30
+          compression-level: 6
 
-  #     # Build summary
-  #     - name: Build summary
-  #       shell: bash
-  #       run: |
-  #         echo "## ✓ Build Complete - ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
-  #         echo "" >> $GITHUB_STEP_SUMMARY
-  #         echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-  #         echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-  #         echo "| **Platform** | ${{ matrix.platform }} |" >> $GITHUB_STEP_SUMMARY
-  #         echo "| **Target** | ${{ matrix.target }} |" >> $GITHUB_STEP_SUMMARY
-  #         echo "| **OS** | ${{ matrix.os }} |" >> $GITHUB_STEP_SUMMARY
-  #         echo "| **Build Duration** | ${BUILD_DURATION}s |" >> $GITHUB_STEP_SUMMARY
-  #         echo "| **Cache Hit** | ${{ steps.cache-ffi.outputs.cache-hit }} |" >> $GITHUB_STEP_SUMMARY
-  #         echo "| **Library Extension** | .${{ matrix.lib_ext }} |" >> $GITHUB_STEP_SUMMARY
-  #         echo "" >> $GITHUB_STEP_SUMMARY
-  #         echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-  #         echo "📦 \`extractous-ffi-${{ matrix.platform }}\` - Distribution ready libraries" >> $GITHUB_STEP_SUMMARY
+      # Build summary
+      - name: Build summary
+        shell: bash
+        run: |
+          echo "## ✓ Build Complete - ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Platform** | ${{ matrix.platform }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target** | ${{ matrix.target }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **OS** | ${{ matrix.os }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Duration** | ${BUILD_DURATION}s |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Cache Hit** | ${{ steps.cache-ffi.outputs.cache-hit }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Library Extension** | .${{ matrix.lib_ext }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "📦 \`extractous-ffi-${{ matrix.platform }}\` - Distribution ready libraries" >> $GITHUB_STEP_SUMMARY
 
   # # Create combined release bundle with all platforms
   # create-release:
