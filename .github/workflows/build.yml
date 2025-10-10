@@ -1,0 +1,228 @@
+name: Build extractous-ffi
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "1.90.0"
+  GRAALVM_VERSION: "25.0.0"
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux_amd64
+            artifact-name: libextractous_ffi.so
+          # - os: macos-latest
+          #   target: x86_64-apple-darwin
+          #   platform: darwin_amd64
+          #   artifact-name: libextractous_ffi.dylib
+          # - os: macos-latest
+          #   target: aarch64-apple-darwin
+          #   platform: darwin_arm64
+          #   artifact-name: libextractous_ffi.dylib
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows_amd64
+            artifact-name: extractous_ffi.dll
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Cache extractous build to avoid rebuilding unchanged dependencies
+      - name: Cache extractous build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            extractous-build
+          key: ${{ runner.os }}-${{ matrix.target }}-extractous-${{ hashFiles('**/Cargo.lock', 'extractous-version.txt') }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.target }}
+
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-20.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            zip \
+            unzip \
+            wget \
+            curl
+
+      # - name: Install system dependencies (macOS)
+      #   if: startsWith(matrix.os, 'macos')
+      #   run: |
+      #     brew install wget
+
+      - name: Install GraalVM
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Windows GraalVM installation
+            curl -L -o graalvm.zip "https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-${{ env.GRAALVM_VERSION }}/graalvm-community-jdk-${{ env.GRAALVM_VERSION }}_windows-x64_bin.zip"
+            unzip graalvm.zip
+            mv graalvm-community-openjdk-${{ env.GRAALVM_VERSION }}* graalvm
+            echo "JAVA_HOME=$(pwd)/graalvm" >> $GITHUB_ENV
+            echo "GRAALVM_HOME=$(pwd)/graalvm" >> $GITHUB_ENV
+            echo "$(pwd)/graalvm/bin" >> $GITHUB_PATH
+          else
+            # Unix-like systems
+            if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+              PLATFORM="linux"
+            else
+              PLATFORM="darwin"
+            fi
+            
+            curl -L -o graalvm.tar.gz "https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-${{ env.GRAALVM_VERSION }}/graalvm-community-jdk-${{ env.GRAALVM_VERSION }}_${PLATFORM}-x64_bin.tar.gz"
+            tar -xzf graalvm.tar.gz
+            mv graalvm-community-openjdk-${{ env.GRAALVM_VERSION }}* graalvm
+            echo "JAVA_HOME=$(pwd)/graalvm" >> $GITHUB_ENV
+            echo "GRAALVM_HOME=$(pwd)/graalvm" >> $GITHUB_ENV
+            echo "$(pwd)/graalvm/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Verify GraalVM installation
+        run: |
+          java -version
+          native-image --version
+
+      - name: Clone and build extractous
+        shell: bash
+        run: |
+          # Clone extractous at specific version
+          EXTRACTOUS_VERSION=$(cat extractous-version.txt 2>/dev/null || echo "main")
+          if [ ! -d "extractous-build" ]; then
+            git clone https://github.com/yobix-ai/extractous.git extractous-build
+            cd extractous-build
+            git checkout $EXTRACTOUS_VERSION
+          else
+            cd extractous-build
+            git pull origin $EXTRACTOUS_VERSION
+          fi
+          
+          # Build extractous-core with native libraries
+          cd extractous-core
+          cargo build --release --target ${{ matrix.target }}
+          
+          # Copy built libraries to a known location
+          mkdir -p ../../native-deps/${{ matrix.platform }}
+          
+          # Find and copy the built native libraries
+          BUILD_DIR=$(find target/${{ matrix.target }}/release/build -name "extractous-core-*" -type d | head -1)
+          if [ -n "$BUILD_DIR" ]; then
+            LIBS_DIR="$BUILD_DIR/out/libs"
+            if [ -d "$LIBS_DIR" ]; then
+              cp -r "$LIBS_DIR"/* ../../native-deps/${{ matrix.platform }}/
+              echo "Copied native libraries from $LIBS_DIR"
+              ls -la ../../native-deps/${{ matrix.platform }}/
+            fi
+          fi
+
+      - name: Install cbindgen
+        run: cargo install cbindgen
+
+      - name: Build FFI library
+        shell: bash
+        run: |
+          # Set library search path for our pre-built native dependencies
+          export EXTRACTOUS_NATIVE_DIR="$(pwd)/native-deps/${{ matrix.platform }}"
+          
+          # Build the FFI library
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare distribution
+        shell: bash
+        run: |
+          mkdir -p dist/${{ matrix.platform }}
+          
+          # Copy the built FFI library
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact-name }} dist/${{ matrix.platform }}/
+          
+          # Copy native dependencies
+          if [ -d "native-deps/${{ matrix.platform }}" ]; then
+            cp -r native-deps/${{ matrix.platform }}/* dist/${{ matrix.platform }}/
+          fi
+          
+          # Copy generated header
+          if [ -f "include/extractous.h" ]; then
+            cp include/extractous.h dist/${{ matrix.platform }}/
+          fi
+          
+          # Create a simple test to verify library loading
+          echo "Creating verification script..."
+          if [[ "${{ matrix.os }}" == "windows-2019" ]]; then
+            cat > dist/${{ matrix.platform }}/verify.bat << 'EOF'
+          @echo off
+          echo Verifying extractous_ffi.dll...
+          where extractous_ffi.dll
+          if %ERRORLEVEL% NEQ 0 (
+              echo ERROR: extractous_ffi.dll not found
+              exit /b 1
+          )
+          echo SUCCESS: Library files present
+          EOF
+          else
+            cat > dist/${{ matrix.platform }}/verify.sh << 'EOF'
+          #!/bin/bash
+          echo "Verifying library files..."
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+              LIB_FILE="libextractous_ffi.dylib"
+          else
+              LIB_FILE="libextractous_ffi.so"
+          fi
+          
+          if [ ! -f "$LIB_FILE" ]; then
+              echo "ERROR: $LIB_FILE not found"
+              exit 1
+          fi
+          
+          if command -v ldd >/dev/null 2>&1; then
+              echo "Library dependencies:"
+              ldd "$LIB_FILE" || true
+          elif command -v otool >/dev/null 2>&1; then
+              echo "Library dependencies:"
+              otool -L "$LIB_FILE" || true
+          fi
+          
+          echo "SUCCESS: Library files present"
+          EOF
+            chmod +x dist/${{ matrix.platform }}/verify.sh
+          fi
+
+      - name: Run verification
+        shell: bash
+        working-directory: dist/${{ matrix.platform }}
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-2019" ]]; then
+            ./verify.bat
+          else
+            ./verify.sh
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractous-ffi-${{ matrix.platform }}
+          path: dist/${{ matrix.platform }}
