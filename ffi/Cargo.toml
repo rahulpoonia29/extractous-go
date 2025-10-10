@@ -13,7 +13,7 @@ name = "extractous_ffi"
 crate-type = ["cdylib"]
 
 [dependencies]
-extractous = { path = "../core", version = "0.2" }
+extractous = "0.3.0"
 libc = "0.2"
 
 [build-dependencies]
