@@ -109,17 +109,20 @@ jobs:
           BUILD_END_TIME=$(date +%s)
           echo "Build completed in $((BUILD_END_TIME - BUILD_START_TIME))s"
 
+          ls -lhR
+
       - name: Prepare distribution
         run: |
           mkdir -p dist/${{ matrix.platform }}
           cp target/${{ matrix.target }}/release/${{ matrix.artifact-name }} dist/${{ matrix.platform }}/ || true
           cp include/extractous.h dist/${{ matrix.platform }}/ || true
 
-      - name: Verify built library
-        working-directory: dist/${{ matrix.platform }}
+      - name: Verify library presence
         run: |
+          mkdir -p dist/linux_amd64
+          cd dist/linux_amd64
           echo "Verifying library presence..."
-          ls -lhR
+          ls -lhR .
           if command -v ldd >/dev/null 2>&1; then
               ldd libextractous_ffi.so || true
           fi
