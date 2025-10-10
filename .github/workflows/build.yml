@@ -118,12 +118,15 @@ jobs:
           echo "Build completed in ${BUILD_DURATION}s"
           echo "BUILD_DURATION=${BUILD_DURATION}" >> $GITHUB_ENV
 
+
       - name: Verify build outputs
         working-directory: ./ffi
         shell: bash
         run: |
+          set +e  # Don't fail on pipe errors
+          
           echo "=== Build artifacts tree ==="
-          tree -P '*.so' target/${{ matrix.target }}/release/ || find target/${{ matrix.target }}/release/ -name "*.so"
+          tree -P '*.so' target/${{ matrix.target }}/release/ 2>/dev/null || find target/${{ matrix.target }}/release/ -name "*.so" | head -30 || true
           
           echo -e "\n=== Main library verification ==="
           MAIN_LIB="target/${{ matrix.target }}/release/libextractous_ffi.so"
@@ -137,41 +140,76 @@ jobs:
             exit 1
           fi
 
-          echo -e "\n=== Bundled libraries ==="
-          find target/${{ matrix.target }}/release/build -name "*.so" -type f | head -20
+          echo -e "\n=== Bundled libraries count ==="
+          TIKA_COUNT=$(find target/${{ matrix.target }}/release/build -path "*/tika-native/build/native/nativeCompile/*.so" -type f 2>/dev/null | wc -l)
+          GRAALVM_COUNT=$(find target/${{ matrix.target }}/release/build -path "*/graalvm-jdk/*/lib/*.so" -type f 2>/dev/null | wc -l)
+          echo "Tika native libraries: $TIKA_COUNT"
+          echo "GraalVM libraries: $GRAALVM_COUNT"
+          echo "Total bundled: $((TIKA_COUNT + GRAALVM_COUNT))"
 
       - name: Collect distribution artifacts
         working-directory: ./ffi
         shell: bash
         run: |
+          set -e
           mkdir -p dist/${{ matrix.platform }}/lib
           
           # Copy main library
+          echo "Copying main library..."
           cp target/${{ matrix.target }}/release/libextractous_ffi.so \
              dist/${{ matrix.platform }}/lib/
           
-          # Copy bundled libraries from build output
-          BUILD_DIR=$(find target/${{ matrix.target }}/release/build -name "extractous-*" -type d | head -1)
-          if [ -d "$BUILD_DIR/out/libs" ]; then
-            echo "Copying bundled libraries from $BUILD_DIR/out/libs"
-            cp -r "$BUILD_DIR/out/libs/"*.so dist/${{ matrix.platform }}/lib/ 2>/dev/null || true
+          # Find the extractous build directory
+          BUILD_DIR=$(find target/${{ matrix.target }}/release/build -maxdepth 1 -name "extractous-*" -type d | head -1)
+          
+          if [ -z "$BUILD_DIR" ]; then
+            echo "Warning: Could not find extractous build directory"
+          else
+            echo "Found build directory: $BUILD_DIR"
+            
+            # Copy Tika native libraries
+            TIKA_DIR="$BUILD_DIR/out/tika-native/build/native/nativeCompile"
+            if [ -d "$TIKA_DIR" ]; then
+              echo "Copying Tika native libraries from $TIKA_DIR"
+              find "$TIKA_DIR" -maxdepth 1 -name "*.so" -type f -exec cp {} dist/${{ matrix.platform }}/lib/ \;
+            fi
+            
+            # Copy essential GraalVM libraries (subset, not all)
+            GRAALVM_LIB_DIR="$BUILD_DIR/out/graalvm-jdk/graalvm-community-openjdk-23.0.1+11.1/lib"
+            if [ -d "$GRAALVM_LIB_DIR" ]; then
+              echo "Copying essential GraalVM libraries from $GRAALVM_LIB_DIR"
+              # Copy only essential JVM libraries, not all GraalVM libs
+              for lib in libjimage.so libzip.so libnio.so; do
+                [ -f "$GRAALVM_LIB_DIR/$lib" ] && cp "$GRAALVM_LIB_DIR/$lib" dist/${{ matrix.platform }}/lib/
+              done
+            fi
+            
+            # Copy libs directory if it exists (alternative location)
+            LIBS_DIR="$BUILD_DIR/out/libs"
+            if [ -d "$LIBS_DIR" ]; then
+              echo "Copying libraries from $LIBS_DIR"
+              cp "$LIBS_DIR"/*.so dist/${{ matrix.platform }}/lib/ 2>/dev/null || true
+            fi
           fi
           
           # Copy headers if they exist
           if [ -d "include" ]; then
+            echo "Copying header files..."
             cp -r include dist/${{ matrix.platform }}/
           fi
           
-          echo "=== Distribution contents ==="
-          tree dist/${{ matrix.platform }} || find dist/${{ matrix.platform }}
+          echo -e "\n=== Distribution contents ==="
+          tree dist/${{ matrix.platform }} 2>/dev/null || find dist/${{ matrix.platform }} -type f
           
-          echo "=== Library count ==="
-          find dist/${{ matrix.platform }} -name "*.so" | wc -l
+          echo -e "\n=== Library count ==="
+          LIB_COUNT=$(find dist/${{ matrix.platform }} -name "*.so" -type f | wc -l)
+          echo "Total libraries in distribution: $LIB_COUNT"
 
       - name: Verify distribution artifacts
         working-directory: ./ffi/dist/${{ matrix.platform }}
         shell: bash
         run: |
+          set -e
           echo "=== Verifying distribution artifacts ==="
           
           if [ ! -f "lib/libextractous_ffi.so" ]; then
@@ -183,7 +221,10 @@ jobs:
           echo "Library size: $(du -h lib/libextractous_ffi.so | cut -f1)"
           
           echo -e "\n=== All libraries in distribution ==="
-          find lib -name "*.so" -type f -exec ls -lh {} \;
+          find lib -name "*.so" -type f -exec basename {} \; | sort
+          
+          echo -e "\n=== Library details ==="
+          ls -lh lib/*.so
           
           echo -e "\n=== Total distribution size ==="
           du -sh .
