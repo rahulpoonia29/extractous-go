@@ -105,6 +105,11 @@ jobs:
           restore-keys: |
             cargo-${{ runner.os }}-${{ matrix.target }}-
 
+      - name: Fix timestamps
+        run: |
+          find target -type f -exec touch {} +
+        working-directory: ./ffi
+
       - name: Build extractous FFI
         shell: bash
         run: |
