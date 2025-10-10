@@ -111,7 +111,7 @@ jobs:
           echo "Building extractous FFI for ${{ matrix.target }}"
           BUILD_START_TIME=$(date +%s)
 
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }} --quiet
 
           BUILD_END_TIME=$(date +%s)
           BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
@@ -126,7 +126,7 @@ jobs:
           set +e  # Don't fail on pipe errors
           
           echo "=== Build artifacts tree ==="
-          tree -P '*.so' target/${{ matrix.target }}/release/ 2>/dev/null || find target/${{ matrix.target }}/release/ -name "*.so" | head -30 || true
+          tree -P '*.so' target/${{ matrix.target }}/release/ --purge 2>/dev/null || find target/${{ matrix.target }}/release/ -name "*.so" | head -30 || true
           
           echo -e "\n=== Main library verification ==="
           MAIN_LIB="target/${{ matrix.target }}/release/libextractous_ffi.so"
@@ -147,63 +147,153 @@ jobs:
           echo "GraalVM libraries: $GRAALVM_COUNT"
           echo "Total bundled: $((TIKA_COUNT + GRAALVM_COUNT))"
 
-      - name: Collect distribution artifacts
+      - name: Collect distribution artifacts (smart recursive)
         working-directory: ./ffi
         shell: bash
         run: |
           set -e
-          mkdir -p dist/${{ matrix.platform }}/lib
           
-          # Copy main library
-          echo "Copying main library..."
-          cp target/${{ matrix.target }}/release/libextractous_ffi.so \
-             dist/${{ matrix.platform }}/lib/
+          mkdir -p dist/${{ matrix.platform }}/lib
           
           # Find the extractous build directory
           BUILD_DIR=$(find target/${{ matrix.target }}/release/build -maxdepth 1 -name "extractous-*" -type d | head -1)
           
           if [ -z "$BUILD_DIR" ]; then
-            echo "Warning: Could not find extractous build directory"
-          else
-            echo "Found build directory: $BUILD_DIR"
-            
-            # Copy Tika native libraries
-            TIKA_DIR="$BUILD_DIR/out/tika-native/build/native/nativeCompile"
-            if [ -d "$TIKA_DIR" ]; then
-              echo "Copying Tika native libraries from $TIKA_DIR"
-              find "$TIKA_DIR" -maxdepth 1 -name "*.so" -type f -exec cp {} dist/${{ matrix.platform }}/lib/ \;
-            fi
-            
-            # Copy essential GraalVM libraries (subset, not all)
-            GRAALVM_LIB_DIR="$BUILD_DIR/out/graalvm-jdk/graalvm-community-openjdk-23.0.1+11.1/lib"
-            if [ -d "$GRAALVM_LIB_DIR" ]; then
-              echo "Copying essential GraalVM libraries from $GRAALVM_LIB_DIR"
-              # Copy only essential JVM libraries, not all GraalVM libs
-              for lib in libjimage.so libzip.so libnio.so; do
-                [ -f "$GRAALVM_LIB_DIR/$lib" ] && cp "$GRAALVM_LIB_DIR/$lib" dist/${{ matrix.platform }}/lib/
-              done
-            fi
-            
-            # Copy libs directory if it exists (alternative location)
-            LIBS_DIR="$BUILD_DIR/out/libs"
-            if [ -d "$LIBS_DIR" ]; then
-              echo "Copying libraries from $LIBS_DIR"
-              cp "$LIBS_DIR"/*.so dist/${{ matrix.platform }}/lib/ 2>/dev/null || true
-            fi
+            echo "Error: Could not find extractous build directory"
+            exit 1
           fi
+          
+          echo "Using build directory: $BUILD_DIR"
+          
+          # Define paths to search for custom libraries
+          SEARCH_PATHS=(
+            "target/${{ matrix.target }}/release"
+            "$BUILD_DIR/out/tika-native/build/native/nativeCompile"
+            "$BUILD_DIR/out/libs"
+            "$BUILD_DIR/out/graalvm-jdk/graalvm-community-openjdk-23.0.1+11.1/lib"
+          )
+          
+          # System library paths to exclude
+          SYSTEM_PATHS=(
+            "/lib/"
+            "/usr/lib/"
+            "/lib64/"
+            "/usr/lib64/"
+            "linux-vdso"
+            "ld-linux"
+          )
+          
+          # Function to check if a library path is a system library
+          is_system_lib() {
+            local lib_path="$1"
+            for sys_path in "${SYSTEM_PATHS[@]}"; do
+              if [[ "$lib_path" == *"$sys_path"* ]]; then
+                return 0  # Is system lib
+              fi
+            done
+            return 1  # Not system lib
+          }
+          
+          # Function to find a library in our search paths
+          find_custom_lib() {
+            local lib_name="$1"
+            for search_path in "${SEARCH_PATHS[@]}"; do
+              if [ -f "$search_path/$lib_name" ]; then
+                echo "$search_path/$lib_name"
+                return 0
+              fi
+              # Also search recursively in subdirectories
+              local found=$(find "$search_path" -name "$lib_name" -type f 2>/dev/null | head -1)
+              if [ -n "$found" ]; then
+                echo "$found"
+                return 0
+              fi
+            done
+            return 1
+          }
+          
+          # Array to track processed libraries (avoid duplicates)
+          declare -A processed_libs
+          
+          # Function to recursively collect dependencies
+          collect_deps() {
+            local lib_path="$1"
+            local lib_name=$(basename "$lib_path")
+            
+            # Skip if already processed
+            if [[ -n "${processed_libs[$lib_name]}" ]]; then
+              return
+            fi
+            
+            echo "Processing: $lib_name"
+            processed_libs[$lib_name]=1
+            
+            # Copy the library
+            cp "$lib_path" dist/${{ matrix.platform }}/lib/
+            echo "  ✓ Copied: $lib_name"
+            
+            # Get dependencies using ldd
+            local deps=$(ldd "$lib_path" 2>/dev/null | grep '=>' | awk '{print $1, $3}')
+            
+            while IFS= read -r line; do
+              if [ -z "$line" ]; then
+                continue
+              fi
+              
+              local dep_name=$(echo "$line" | awk '{print $1}')
+              local dep_path=$(echo "$line" | awk '{print $2}')
+              
+              # Skip if no path found (not found dependency)
+              if [ "$dep_path" = "" ] || [ "$dep_path" = "not" ]; then
+                continue
+              fi
+              
+              # Skip system libraries
+              if is_system_lib "$dep_path"; then
+                echo "  - Skipping system lib: $dep_name"
+                continue
+              fi
+              
+              # Try to find this library in our custom paths
+              local custom_lib=$(find_custom_lib "$dep_name")
+              if [ -n "$custom_lib" ]; then
+                echo "  → Found custom dependency: $dep_name"
+                collect_deps "$custom_lib"  # Recursively process
+              else
+                echo "  ! Dependency $dep_name not in build dir (external: $dep_path)"
+              fi
+            done <<< "$deps"
+          }
+          
+          # Start from the main library
+          MAIN_LIB="target/${{ matrix.target }}/release/libextractous_ffi.so"
+          
+          echo "=== Starting recursive dependency collection ==="
+          echo "Main library: $MAIN_LIB"
+          echo ""
+          
+          collect_deps "$MAIN_LIB"
+          
+          echo ""
+          echo "=== Collection complete ==="
+          echo "Libraries collected:"
+          ls -1 dist/${{ matrix.platform }}/lib/
+          
+          echo ""
+          echo "=== Library details ==="
+          ls -lh dist/${{ matrix.platform }}/lib/
+          
+          echo ""
+          echo "=== Total size ==="
+          du -sh dist/${{ matrix.platform }}/lib/
           
           # Copy headers if they exist
           if [ -d "include" ]; then
+            echo ""
             echo "Copying header files..."
             cp -r include dist/${{ matrix.platform }}/
           fi
-          
-          echo -e "\n=== Distribution contents ==="
-          tree dist/${{ matrix.platform }} 2>/dev/null || find dist/${{ matrix.platform }} -type f
-          
-          echo -e "\n=== Library count ==="
-          LIB_COUNT=$(find dist/${{ matrix.platform }} -name "*.so" -type f | wc -l)
-          echo "Total libraries in distribution: $LIB_COUNT"
+
 
       - name: Verify distribution artifacts
         working-directory: ./ffi/dist/${{ matrix.platform }}
@@ -236,15 +326,6 @@ jobs:
           path: ffi/dist/${{ matrix.platform }}
           retention-days: 30
           compression-level: 6
-
-      - name: Upload complete target directory
-        uses: actions/upload-artifact@v4
-        with:
-          name: extractous-ffi-target-${{ matrix.platform }}
-          path: ffi/target/${{ matrix.target }}
-          retention-days: 7
-          compression-level: 0
-          if-no-files-found: error
 
       - name: Build summary
         run: |
