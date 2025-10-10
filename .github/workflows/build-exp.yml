@@ -107,6 +107,7 @@ jobs:
 
       - name: Fix timestamps
         run: |
+          tree .
           find target -type f -exec touch {} +
         working-directory: ./ffi
 
