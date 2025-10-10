@@ -69,7 +69,8 @@ jobs:
             zip \
             unzip \
             wget \
-            curl
+            curl \
+            ldd
 
       # - name: Install system dependencies (macOS)
       #   if: startsWith(matrix.os, 'macos')
@@ -89,49 +90,28 @@ jobs:
           java -version
           native-image --version
 
-      - name: Clone and build extractous
-        shell: bash
-        run: |
-          # Clone extractous at specific version
-          EXTRACTOUS_VERSION=$(cat extractous-version.txt 2>/dev/null || echo "main")
-          if [ ! -d "extractous-build" ]; then
-            git clone https://github.com/yobix-ai/extractous.git extractous-build
-            cd extractous-build
-            git checkout $EXTRACTOUS_VERSION
-          else
-            cd extractous-build
-            git pull origin $EXTRACTOUS_VERSION
-          fi
-          
-          # Build extractous-core with native libraries
-          cd extractous-core
-          cargo build --release --target ${{ matrix.target }}
-          
-          # Copy built libraries to a known location
-          mkdir -p ../../native-deps/${{ matrix.platform }}
-          
-          # Find and copy the built native libraries
-          BUILD_DIR=$(find target/${{ matrix.target }}/release/build -name "extractous-core-*" -type d | head -1)
-          if [ -n "$BUILD_DIR" ]; then
-            LIBS_DIR="$BUILD_DIR/out/libs"
-            if [ -d "$LIBS_DIR" ]; then
-              cp -r "$LIBS_DIR"/* ../../native-deps/${{ matrix.platform }}/
-              echo "Copied native libraries from $LIBS_DIR"
-              ls -la ../../native-deps/${{ matrix.platform }}/
-            fi
-          fi
-
-      - name: Install cbindgen
-        run: cargo install cbindgen
+      - name: Install cbindgen & extractous
+        run: cargo install cbindgen, extractous
 
       - name: Build FFI library
         shell: bash
         run: |
-          # Set library search path for our pre-built native dependencies
-          export EXTRACTOUS_NATIVE_DIR="$(pwd)/native-deps/${{ matrix.platform }}"
-          
+          BUILD_START_TIME=$(date +%s)
+
           # Build the FFI library
           cargo build --release --target ${{ matrix.target }}
+
+          BUILD_END_TIME=$(date +%s)
+          BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+          echo "Build completed successfully in ${BUILD_DURATION} seconds"
+
+          # Show the directory structure
+          echo "General file structure"
+          ls -lhR ./
+
+          echo "Release folder structure"
+          ls -lhR target/${{ matrix.target }}/release/
+
 
       - name: Prepare distribution
         shell: bash
