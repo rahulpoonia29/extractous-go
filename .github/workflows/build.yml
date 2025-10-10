@@ -1,0 +1,194 @@
+name: Build extractous-ffi
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "1.90.0"
+
+jobs:
+  ffi-build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux_amd64
+            target: x86_64-unknown-linux-gnu
+            lib_ext: so
+            os_name: Linux
+            
+          - os: windows-latest
+            platform: windows_amd64
+            target: x86_64-pc-windows-msvc
+            lib_ext: dll
+            os_name: Windows
+            
+          # - os: macos-13
+          #   platform: darwin_amd64
+          #   target: x86_64-apple-darwin
+          #   lib_ext: dylib
+          #   os_name: macOS
+            
+          # - os: macos-latest
+          #   platform: darwin_arm64
+          #   target: aarch64-apple-darwin
+          #   lib_ext: dylib
+          #   os_name: macOS
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.target }}
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev tree
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tree
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1.4.1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'true'
+
+      - name: Cache FFI build artifacts
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ffi/target
+          key: ffi-build-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock', 'ffi/**/*.rs', 'ffi/build.rs', 'ffi/Cargo.toml') }}
+          restore-keys: |
+            ffi-build-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Fix timestamps after cache restore
+        working-directory: ./ffi
+        shell: bash
+        run: |
+          find . -name "*.rs" -exec touch {} + 2>/dev/null || true
+          find . -name "Cargo.toml" -exec touch {} + 2>/dev/null || true
+          find . -name "Cargo.lock" -exec touch {} + 2>/dev/null || true
+          find . -name "build.rs" -exec touch {} + 2>/dev/null || true
+          find target -type f -exec touch {} + 2>/dev/null || true
+
+      - name: Verify environment
+        shell: bash
+        run: |
+          java -version
+          rustc --version
+          echo "Target: ${{ matrix.target }}"
+          echo "Platform: ${{ matrix.platform }}"
+
+      - name: Build extractous FFI
+        working-directory: ./ffi
+        shell: bash
+        run: |
+          set -e
+          BUILD_START_TIME=$(date +%s)
+          cargo build --release --target ${{ matrix.target }} --quiet
+          BUILD_END_TIME=$(date +%s)
+          BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+          echo "Build completed in ${BUILD_DURATION}s"
+          echo "BUILD_DURATION=${BUILD_DURATION}" >> $GITHUB_ENV
+
+      - name: Verify build outputs
+        working-directory: ./ffi
+        shell: bash
+        run: |
+          chmod +x ../.github/scripts/verify-build.sh
+          ../.github/scripts/verify-build.sh \
+            "${{ matrix.target }}" \
+            "${{ matrix.lib_ext }}" \
+            "${{ matrix.os_name }}"
+
+      - name: Collect distribution artifacts
+        working-directory: ./ffi
+        shell: bash
+        run: |
+          chmod +x ../.github/scripts/collect-dependencies.sh
+          ../.github/scripts/collect-dependencies.sh \
+            "${{ matrix.platform }}" \
+            "${{ matrix.target }}" \
+            "${{ matrix.lib_ext }}" \
+            "${{ matrix.os_name }}"
+
+      - name: Verify distribution artifacts
+        working-directory: ./ffi
+        shell: bash
+        run: |
+          chmod +x ../.github/scripts/verify-distribution.sh
+          ../.github/scripts/verify-distribution.sh \
+            "${{ matrix.platform }}" \
+            "${{ matrix.lib_ext }}"
+
+      - name: Upload FFI distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractous-ffi-${{ matrix.platform }}
+          path: ffi/dist/${{ matrix.platform }}
+          retention-days: 30
+          compression-level: 6
+
+      - name: Build summary
+        shell: bash
+        run: |
+          echo "## Build Summary - ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platform:** ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target:** ${{ matrix.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Duration:** ${BUILD_DURATION}s" >> $GITHUB_STEP_SUMMARY
+          echo "- **Library Extension:** .${{ matrix.lib_ext }}" >> $GITHUB_STEP_SUMMARY
+
+  create-release:
+    name: Create Release Bundle
+    needs: ffi-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Create combined archives
+        shell: bash
+        run: |
+          cd artifacts
+          for platform in linux_amd64 windows_amd64 darwin_amd64 darwin_arm64; do
+            if [ -d "extractous-ffi-$platform" ]; then
+              cd "extractous-ffi-$platform"
+              tar czf "../extractous-ffi-$platform.tar.gz" .
+              cd ..
+              echo "✓ Created archive for $platform"
+            fi
+          done
+          ls -lh *.tar.gz
+      
+      - name: Upload combined artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractous-ffi-all-platforms
+          path: artifacts/*.tar.gz
+          retention-days: 90
