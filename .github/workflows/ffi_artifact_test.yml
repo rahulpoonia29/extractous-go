@@ -1,0 +1,35 @@
+name: Upload extractous-ffi
+
+on:
+  push:
+    branches: [ main, testing-workflow ]
+  # pull_request:
+  #   branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-ffi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore FFI cache
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ffi-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock', 'ffi/build.rs') }}
+      - name: Build FFI
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Save FFI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffi-build
+          path: |
+            target/${{ matrix.target }}/release/*.so
+            include/extractous.h
+
+      - uses: actions/checkout@v4
+      - name: Download FFI artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: ffi-build
+          path: ./ffi-artifact
