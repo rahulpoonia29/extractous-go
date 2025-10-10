@@ -96,9 +96,6 @@ jobs:
           # Show the directory structure
           echo "General file structure"
           ls -lhR ./
-
-          echo "Release folder structure"
-          ls -lhR target/${{ matrix.target }}/release/
           
           BUILD_START_TIME=$(date +%s)
 
