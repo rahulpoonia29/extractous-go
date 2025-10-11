@@ -70,14 +70,25 @@ jobs:
             pkg-config \
             libssl-dev
 
-      # Setup GraalVM with native-image
-      - name: Setup GraalVM
+      - name: Setup GraalVM (Windows)
+        if: runner.os == 'Windows'
         uses: graalvm/setup-graalvm@v1.4.1
         with:
           java-version: '21'
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          native-image-job-reports: 'true'
+          native-image-job-reports: 'false'
+          components: 'native-image'
+          set-java-home: 'true'
+
+      - name: Setup GraalVM (Non-Windows)
+        if: runner.os != 'Windows'
+        uses: graalvm/setup-graalvm@v1.4.1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'false'
 
       # Rust caching
       - name: Cache Rust dependencies
@@ -115,7 +126,7 @@ jobs:
           echo "=== Building extractous FFI for ${{ matrix.target }} ==="
           BUILD_START_TIME=$(date +%s)
           
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }} --quiet
           
           BUILD_END_TIME=$(date +%s)
           BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
