@@ -100,10 +100,18 @@ jobs:
           native-image-job-reports: 'false'
           set-java-home: 'true'
 
-      - name: Verify GraalVM setup
-        shell: bash
+      - name: Verify GraalVM setup (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          echo "GRAALVM_HOME: ${GRAALVM_HOME:-$JAVA_HOME}"
+          Write-Host "GRAALVM_HOME: $env:GRAALVM_HOME"
+          Write-Host "JAVA_HOME: $env:JAVA_HOME"
+          & "$env:GRAALVM_HOME\bin\native-image.cmd" --version
+
+      - name: Verify GraalVM setup (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          echo "GRAALVM_HOME: $GRAALVM_HOME"
           echo "JAVA_HOME: $JAVA_HOME"
           java --version
           native-image --version
