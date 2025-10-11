@@ -1,126 +1,69 @@
-name: Create Release
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags like v0.2.1
+      - 'v*.*.*'  # Trigger on semantic version tags (v1.0.0, v0.2.1, etc.)
   workflow_dispatch:
     inputs:
       tag_name:
         description: 'Release tag name (e.g., v1.0.0)'
         required: true
         type: string
-      run_id:
-        description: 'Build workflow run ID (leave empty to trigger new build)'
-        required: false
-        type: string
+
+# Prevent concurrent releases
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
 
 jobs:
-  # Optional: Trigger a fresh build if no run_id provided
-  trigger-build:
-    name: Trigger Build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_id == ''
-    outputs:
-      run_id: ${{ steps.trigger.outputs.run_id }}
-    steps:
-      - name: Trigger build workflow
-        id: trigger
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const response = await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'build-ffi.yml',
-              ref: context.ref
-            });
-            
-            // Wait a bit for the workflow to start
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            
-            // Get the latest run
-            const runs = await github.rest.actions.listWorkflowRuns({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'build-ffi.yml',
-              per_page: 1
-            });
-            
-            const runId = runs.data.workflow_runs[0].id;
-            core.setOutput('run_id', runId);
-            return runId;
+  # Build artifacts for all platforms
+  build:
+    name: Build Release Artifacts
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
 
+  # Create GitHub Release with built artifacts
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [trigger-build]
-    if: always() && (needs.trigger-build.result == 'success' || needs.trigger-build.result == 'skipped')
+    needs: [build]
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Determine run ID
-        id: run-id
+      - name: Determine tag name
+        id: tag
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ -n "${{ github.event.inputs.run_id }}" ]; then
-              echo "run_id=${{ github.event.inputs.run_id }}" >> $GITHUB_OUTPUT
-            else
-              echo "run_id=${{ needs.trigger-build.outputs.run_id }}" >> $GITHUB_OUTPUT
-            fi
+            echo "tag_name=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
           else
-            # For tag push, use the current workflow run's build artifacts
-            # We need to get the run ID from the build that was triggered by this tag
-            echo "Using artifacts from tag-triggered build"
-            echo "run_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
-      
-      - name: Wait for build completion (if triggered)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_id == ''
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const runId = ${{ steps.run-id.outputs.run_id }};
-            
-            let status = 'in_progress';
-            while (status === 'in_progress' || status === 'queued') {
-              await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30s
-              
-              const run = await github.rest.actions.getWorkflowRun({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id: runId
-              });
-              
-              status = run.data.status;
-              console.log(`Build status: ${status}`);
-              
-              if (run.data.conclusion === 'failure') {
-                core.setFailed('Build failed');
-                return;
-              }
-            }
       
       - name: Download all platform artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          run-id: ${{ steps.run-id.outputs.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: extractous-ffi-*
+          merge-multiple: false
       
       - name: Create platform archives
         shell: bash
         run: |
           cd artifacts
           
-          for platform in linux_amd64 windows_amd64 darwin_amd64 darwin_arm64; do
+          for platform in linux_amd64 windows_amd64 darwin_arm64; do
             if [ -d "extractous-ffi-$platform" ]; then
               echo "Creating archive for $platform..."
               cd "extractous-ffi-$platform"
-              tar czf "../extractous-ffi-$platform.tar.gz" .
+              tar czf "../extractous-ffi-$platform.tar.gz" lib/ include/
               cd ..
               
               # Generate checksum
@@ -132,24 +75,23 @@ jobs:
           
           echo ""
           echo "=== Created archives ==="
-          ls -lh *.tar.gz
+          ls -lh *.tar.gz 2>/dev/null || echo "No archives created"
       
       - name: Generate release notes
         id: release-notes
         shell: bash
         run: |
-          TAG_NAME="${{ github.event.inputs.tag_name || github.ref_name }}"
+          TAG_NAME="${{ steps.tag.outputs.tag_name }}"
           
           cat > release_notes.md <<EOF
-          # Extractous FFI ${TAG_NAME}
+          # Extractous Go FFI ${TAG_NAME}
           
-          Multi-platform native library binaries for extractous.
+          Multi-platform native library binaries for extractous-go.
           
           ## Platforms
           
           - **Linux AMD64** - \`extractous-ffi-linux_amd64.tar.gz\`
           - **Windows AMD64** - \`extractous-ffi-windows_amd64.tar.gz\`
-          - **macOS Intel** - \`extractous-ffi-darwin_amd64.tar.gz\`
           - **macOS Apple Silicon** - \`extractous-ffi-darwin_arm64.tar.gz\`
           
           ## Installation
@@ -179,13 +121,13 @@ jobs:
           cat release_notes.md
       
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          name: Release ${{ github.event.inputs.tag_name || github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          name: Release ${{ steps.tag.outputs.tag_name }}
           body_path: release_notes.md
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(steps.tag.outputs.tag_name, '-') }}
           files: |
             artifacts/*.tar.gz
             artifacts/*.sha256
@@ -196,7 +138,7 @@ jobs:
       - name: Release summary
         shell: bash
         run: |
-          TAG_NAME="${{ github.event.inputs.tag_name || github.ref_name }}"
+          TAG_NAME="${{ steps.tag.outputs.tag_name }}"
           
           echo "## 🎉 Release Published: ${TAG_NAME}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -204,7 +146,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           cd artifacts
-          for platform in linux_amd64 windows_amd64 darwin_amd64 darwin_arm64; do
+          for platform in linux_amd64 windows_amd64 darwin_arm64; do
             if [ -f "extractous-ffi-$platform.tar.gz" ]; then
               size=$(du -h "extractous-ffi-$platform.tar.gz" | cut -f1)
               checksum=$(cat "extractous-ffi-$platform.tar.gz.sha256" | cut -d' ' -f1 | cut -c1-16)

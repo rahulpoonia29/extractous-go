@@ -1,18 +1,43 @@
-name: Build extractous-ffi
+name: Build and Test
 
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'ffi/**'
+      - 'src/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/scripts/**'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'ffi/**'
+      - 'src/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/scripts/**'
   workflow_dispatch:
+  workflow_call:
+    outputs:
+      run_id:
+        description: "The run ID of this workflow"
+        value: ${{ github.run_id }}
+
+# Cancel in-progress runs for the same workflow + branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   RUST_VERSION: "1.90.0"
   CARGO_TERM_COLOR: always
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
 
 jobs:
   build:
@@ -64,12 +89,7 @@ jobs:
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y build-essential pkg-config libssl-dev tree
-
-      - name: Install Xcode Command Line Tools (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          xcode-select --install 2>/dev/null || true
+          sudo apt-get install -y build-essential pkg-config libssl-dev
 
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
@@ -80,18 +100,10 @@ jobs:
           native-image-job-reports: 'false'
           set-java-home: 'true'
 
-      - name: Verify native-image (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Verify GraalVM setup
+        shell: bash
         run: |
-          Write-Host "GRAALVM_HOME: $env:GRAALVM_HOME"
-          Write-Host "JAVA_HOME: $env:JAVA_HOME"
-          & "$env:GRAALVM_HOME\bin\native-image.cmd" --version
-
-      - name: Verify native-image (Linux / macOS)
-        if: runner.os != 'Windows'
-        run: |
-          echo "GRAALVM_HOME: $GRAALVM_HOME"
+          echo "GRAALVM_HOME: ${GRAALVM_HOME:-$JAVA_HOME}"
           echo "JAVA_HOME: $JAVA_HOME"
           java --version
           native-image --version
@@ -106,9 +118,11 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
-          workspaces: "./ffi -> target"
+          prefix-key: "v1-rust"
+          shared-key: ${{ matrix.target }}
+          workspaces: "./ffi"
           cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Cache GraalVM Native Image
         id: cache-graalvm
@@ -116,47 +130,21 @@ jobs:
         with:
           path: |
             ffi/target/${{ matrix.target }}/release/build/extractous-*/out
-          key: graalvm-v3-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock', 'ffi/Cargo.toml') }}
+          key: graalvm-v4-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('ffi/Cargo.lock', 'ffi/Cargo.toml', 'ffi/build.rs') }}
           restore-keys: |
-            graalvm-v3-${{ runner.os }}-${{ matrix.target }}-
-
-      - name: Fix cached artifact timestamps
-        if: steps.cache-graalvm.outputs.cache-hit == 'true'
-        shell: bash
-        run: |
-          echo "=== Cache HIT - Fixing timestamps to prevent rebuild ==="
-          
-          # Update all cached artifacts to current time
-          BUILD_CACHE="./ffi/target/${{ matrix.target }}/release/build"
-          
-          if [ -d "$BUILD_CACHE" ]; then
-            # Touch all files in the extractous build directory
-            find "$BUILD_CACHE" -type d -name "extractous-*" -exec find {} -type f -exec touch {} + 2>/dev/null || true
-            
-            # Specifically ensure libtika_native has fresh timestamp
-            TIKA_LIB=$(find "$BUILD_CACHE" -name "libtika_native.*" -o -name "tika_native.*" 2>/dev/null | head -1)
-            if [ -f "$TIKA_LIB" ]; then
-              touch "$TIKA_LIB"
-              echo "✓ Updated timestamp: $(basename $TIKA_LIB) - $(date -r "$TIKA_LIB" '+%Y-%m-%d %H:%M:%S')"
-            fi
-            
-            # Also touch the fingerprint files that Cargo uses
-            find "$BUILD_CACHE" -name ".fingerprint" -type d -exec find {} -type f -exec touch {} + 2>/dev/null || true
-            
-            echo "✓ All cached artifacts updated"
-          fi
+            graalvm-v4-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Cache status
         shell: bash
         run: |
           if [ "${{ steps.cache-graalvm.outputs.cache-hit }}" = "true" ]; then
-            echo "✓ GraalVM cache HIT - Native image should not recompile"
+            echo "✓ GraalVM cache HIT - Native image compilation will be skipped"
           else
-            echo "⚠ GraalVM cache MISS - Full native image compilation (~5-6 minutes)"
+            echo "⚠ GraalVM cache MISS - Full native image compilation required (~5-6 minutes)"
           fi
 
 
-      # For Unix-based systems (Linux/macOS)
+      # Build FFI library (Unix)
       - name: Build FFI library (Unix)
         if: runner.os != 'Windows'
         working-directory: ./ffi
@@ -168,11 +156,10 @@ jobs:
           BUILD_TIME=$((BUILD_END - BUILD_START))
           echo "Build completed in ${BUILD_TIME}s"
           echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_ENV
-          tree -P "*.so|*.rs" --prune
         env:
           RUST_BACKTRACE: 1
 
-      # For Windows
+      # Build FFI library (Windows) - Use PowerShell to avoid Git link.exe conflict
       - name: Build FFI library (Windows)
         if: runner.os == 'Windows'
         working-directory: ./ffi
@@ -182,13 +169,8 @@ jobs:
           cargo build --release --target ${{ matrix.target }} --quiet
           $BUILD_END = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           $BUILD_TIME = $BUILD_END - $BUILD_START
-          Write-Host "Build completed in $BUILD_TIME seconds"
+          Write-Host "Build completed in ${BUILD_TIME}s"
           "BUILD_TIME=$BUILD_TIME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Get-ChildItem -Recurse -Include *.dll, *.lib, *.rs | ForEach-Object {
-            $relative = $_.FullName.Substring((Get-Location).Path.Length + 1)
-            $indent = ($relative.Split([IO.Path]::DirectorySeparatorChar).Count - 1) * '  '
-            Write-Host ("{0}{1}" -f $indent, $_.Name)
-          }
         env:
           RUST_BACKTRACE: 1
 
@@ -219,45 +201,19 @@ jobs:
           fi
           echo "Optimized size: $(du -sh dist/${{ matrix.platform }}/lib/ | cut -f1)"
 
-      # # Verify Distribution
-      # - name: Verify distribution
-      #   shell: bash
-      #   run: |
-      #     chmod +x ./.github/workflows/scripts/verify-distribution.sh
-      #     ./.github/workflows/scripts/verify-distribution.sh ${{ matrix.platform }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
-
-      # Create Archive
-      - name: Create distribution archive
+      # Verify Distribution
+      - name: Verify distribution
         shell: bash
         run: |
-          cd dist/${{ matrix.platform }}
-          
-          if [ "${{ matrix.os_name }}" = "Windows" ]; then
-            7z a ../../extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }} lib/ include/
-          else
-            tar -czf ../../extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }} lib/ include/
-          fi
-          
-          cd ../..
-          ls -lh extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}
-
-      # Generate Checksums
-      - name: Generate checksums
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            certutil -hashfile extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }} SHA256 > extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}.sha256
-          else
-            shasum -a 256 extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }} > extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}.sha256
-          fi
-          cat extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}.sha256
+          chmod +x ./.github/workflows/scripts/verify-distribution.sh
+          ./.github/workflows/scripts/verify-distribution.sh ${{ matrix.platform }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
 
       # Upload Artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: extractous-ffi-${{ matrix.platform }}
-          path: |
-            extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}
-            extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}.sha256
-          retention-days: 3
+          path: dist/${{ matrix.platform }}
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}
+          compression-level: 9
+          if-no-files-found: error
