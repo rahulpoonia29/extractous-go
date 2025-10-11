@@ -54,15 +54,6 @@ jobs:
         with:
           arch: x64
 
-      - name: Verify Visual Studio Setup (Windows)
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          echo Verifying Visual Studio C++ compiler...
-          where cl.exe
-          cl.exe 2>&1
-          echo Visual Studio environment ready
-
       # Install Rust
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -93,12 +84,6 @@ jobs:
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: 'true'
-
-      - name: Verify GraalVM installation
-        shell: bash
-        run: |
-          java -version
-          native-image --version
 
       # Cache build artifacts (changes with source code)
       - name: Cache FFI build artifacts

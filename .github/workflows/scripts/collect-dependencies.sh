@@ -45,6 +45,12 @@ if [ -n "$GRAALVM_PATH" ]; then
   fi
 fi
 
+echo "Search paths configured:"
+for path in "${SEARCH_PATHS[@]}"; do
+  echo "  - $path"
+done
+echo ""
+
 # Platform-specific system library paths to exclude
 if [ "$OS" = "Linux" ]; then
   SYSTEM_PATHS=("/lib/" "/usr/lib/" "/lib64/" "/usr/lib64/" "linux-vdso" "ld-linux")
@@ -68,17 +74,24 @@ is_system_lib() {
 # Function to find a library in our search paths
 find_custom_lib() {
   local lib_name="$1"
+  
+  # First, try direct file match in each search path
   for search_path in "${SEARCH_PATHS[@]}"; do
     if [ -f "$search_path/$lib_name" ]; then
       echo "$search_path/$lib_name"
       return 0
     fi
+  done
+  
+  # Then, search recursively (slower but more thorough)
+  for search_path in "${SEARCH_PATHS[@]}"; do
     local found=$(find "$search_path" -name "$lib_name" -type f 2>/dev/null | head -1)
     if [ -n "$found" ]; then
       echo "$found"
       return 0
     fi
   done
+  
   return 1
 }
 
@@ -90,6 +103,7 @@ get_dependencies() {
   local lib_path="$1"
   
   if [ "$OS" = "Linux" ]; then
+    # Use ldd to get dependencies
     ldd "$lib_path" 2>/dev/null | grep '=>' | awk '{print $1, $3}'
   elif [ "$OS" = "macOS" ]; then
     otool -L "$lib_path" 2>/dev/null | tail -n +2 | awk '{print $1, $1}'
@@ -107,47 +121,82 @@ collect_deps() {
   local lib_path="$1"
   local lib_name=$(basename "$lib_path")
   
+  # Skip if already processed
   if [[ -n "${processed_libs[$lib_name]}" ]]; then
+    echo "  (Already processed: $lib_name)"
     return
   fi
   
   echo "Processing: $lib_name"
   processed_libs[$lib_name]=1
   
+  # Copy the library
   cp "$lib_path" "dist/$PLATFORM/lib/"
   echo "  ✓ Copied: $lib_name"
   
+  # Get dependencies
   local deps=$(get_dependencies "$lib_path")
   
+  if [ -z "$deps" ]; then
+    echo "  - No dependencies found or all are system libraries"
+    return
+  fi
+  
+  # Process each dependency
   while IFS= read -r line; do
     if [ -z "$line" ]; then
       continue
     fi
     
     local dep_name=$(echo "$line" | awk '{print $1}')
-    local dep_path=$(echo "$line" | awk '{print $2}')
+    local dep_resolved_path=$(echo "$line" | awk '{print $2}')
     
-    if [ "$dep_path" = "" ] || [ "$dep_path" = "not" ]; then
+    # Skip if no dependency name
+    if [ -z "$dep_name" ] || [ "$dep_name" = "not" ]; then
       continue
     fi
     
-    if is_system_lib "$dep_path"; then
-      echo "  - Skipping system lib: $dep_name"
+    echo "  → Checking dependency: $dep_name"
+    
+    # Skip if it's a system library (check resolved path)
+    if [ -n "$dep_resolved_path" ] && is_system_lib "$dep_resolved_path"; then
+      echo "    ✗ Skipping system lib: $dep_name (at $dep_resolved_path)"
       continue
     fi
     
+    # Check if dependency is already in our distribution
+    if [ -f "dist/$PLATFORM/lib/$dep_name" ]; then
+      echo "    ✓ Already in distribution: $dep_name"
+      continue
+    fi
+    
+    # Try to find the library in our build directories
     local custom_lib=$(find_custom_lib "$dep_name")
+    
     if [ -n "$custom_lib" ]; then
-      echo "  → Found custom dependency: $dep_name"
+      echo "    ✓ Found in build: $custom_lib"
+      # Recursively process this dependency
       collect_deps "$custom_lib"
     else
-      echo "  ! Dependency $dep_name not in build dir (external: $dep_path)"
+      # If we couldn't find it in build dirs, check if ldd gave us a resolved path
+      if [ -n "$dep_resolved_path" ] && [ -f "$dep_resolved_path" ] && ! is_system_lib "$dep_resolved_path"; then
+        echo "    ! Using resolved path: $dep_resolved_path"
+        collect_deps "$dep_resolved_path"
+      else
+        echo "    ! Warning: Dependency $dep_name not found in build directories"
+        echo "              Resolved path: ${dep_resolved_path:-not resolved}"
+      fi
     fi
   done <<< "$deps"
 }
 
 # Start from the main library
-MAIN_LIB="./ffi/target/$TARGET/release/libextractous_ffi.$LIB_EXT"
+MAIN_LIB="./ffitarget/$TARGET/release/libextractous_ffi.$LIB_EXT"
+
+if [ ! -f "$MAIN_LIB" ]; then
+  echo "Error: Main library not found: $MAIN_LIB"
+  exit 1
+fi
 
 echo "=== Starting recursive dependency collection ==="
 echo "Main library: $MAIN_LIB"
@@ -158,11 +207,30 @@ collect_deps "$MAIN_LIB"
 echo ""
 echo "=== Collection complete ==="
 echo "Libraries collected:"
-ls -1 "dist/$PLATFORM/lib/"
+ls -1 "dist/$PLATFORM/lib/" | sort
 
 echo ""
 echo "=== Library details ==="
 ls -lh "dist/$PLATFORM/lib/"
+
+echo ""
+echo "=== Dependency verification ==="
+for lib in dist/$PLATFORM/lib/*.$LIB_EXT; do
+  lib_name=$(basename "$lib")
+  echo "Checking $lib_name:"
+  if [ "$OS" = "Linux" ]; then
+    ldd "$lib" 2>/dev/null | grep "not found" && echo "  ⚠ Missing dependencies!" || echo "  ✓ All dependencies resolved"
+  elif [ "$OS" = "macOS" ]; then
+    otool -L "$lib" 2>/dev/null | tail -n +2 | while read -r line; do
+      dep=$(echo "$line" | awk '{print $1}')
+      if [[ "$dep" != /usr/* ]] && [[ "$dep" != /System/* ]] && [[ "$dep" != @* ]]; then
+        if [ ! -f "dist/$PLATFORM/lib/$(basename "$dep")" ]; then
+          echo "  ⚠ Missing: $(basename "$dep")"
+        fi
+      fi
+    done
+  fi
+done
 
 echo ""
 echo "=== Total size ==="
