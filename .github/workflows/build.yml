@@ -168,7 +168,7 @@ jobs:
           BUILD_TIME=$((BUILD_END - BUILD_START))
           echo "Build completed in ${BUILD_TIME}s"
           echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_ENV
-          tree -P "*.so|*.rs" --purne
+          tree -P "*.so|*.rs" --prune
         env:
           RUST_BACKTRACE: 1
 
