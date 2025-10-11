@@ -28,7 +28,7 @@ fi
 echo "Build directory: $BUILD_DIR"
 
 # Find GraalVM directory
-GRAALVM_DIR=$(find "$BUILD_DIR/out" -type d -name "graalvm-*" 2>/dev/null | head -1)
+GRAALVM_DIR="$BUILD_DIR/out"
 echo "GraalVM directory: ${GRAALVM_DIR:-Not found}"
 echo ""
 
@@ -49,41 +49,19 @@ else
     exit 1
 fi
 
-# 2. Copy libtika_native
+# 2. Copy libtika_native and its dependencies
 echo ""
-echo "=== Tika Native Library ==="
-TIKA_LIB=$(find "$BUILD_DIR/out/tika-native/build/native/nativeCompile" -name "libtika_native.$LIB_EXT" 2>/dev/null | head -1)
+echo "=== libtika_native and Dependencies ==="
+LIB_DIR="$GRAALVM_DIR/tika-native/build/native/nativeCompile"
 
-if [ -f "$TIKA_LIB" ]; then
-    cp "$TIKA_LIB" "dist/$PLATFORM/lib/"
-    echo "✓ Copied libtika_native.$LIB_EXT"
+if [ -f "$LIB_DIR" ]; then
+    cp "$LIB_DIR"/*."$LIB_EXT" "dist/$PLATFORM/lib/"
+    echo "✓ Copied dependencies from $LIB_DIR"
 else
-    echo "⚠ Warning: libtika_native not found"
+    echo "⚠ Warning: No dependencies found in $LIB_DIR"
 fi
 
-# 3. Copy ALL GraalVM runtime libraries directly
-echo ""
-echo "=== GraalVM Runtime Libraries ==="
-
-if [ -n "$GRAALVM_DIR" ]; then
-    if [ "$OS" = "Windows" ]; then
-        # Windows: Copy from bin/
-        if [ -d "$GRAALVM_DIR/bin" ]; then
-            cp "$GRAALVM_DIR/bin"/*.$LIB_EXT "dist/$PLATFORM/lib/" 2>/dev/null || true
-            COUNT=$(find "dist/$PLATFORM/lib" -name "*.$LIB_EXT" | wc -l)
-            echo "✓ Copied $COUNT DLLs from GraalVM"
-        fi
-    else
-        # Linux/macOS: Copy from lib/
-        if [ -d "$GRAALVM_DIR/lib" ]; then
-            cp "$GRAALVM_DIR/lib"/*.$LIB_EXT "dist/$PLATFORM/lib/" 2>/dev/null || true
-            COUNT=$(find "dist/$PLATFORM/lib" -name "*.$LIB_EXT" | wc -l)
-            echo "✓ Copied $COUNT libraries from GraalVM"
-        fi
-    fi
-fi
-
-# 4. Copy header
+# 3. Copy header
 echo ""
 echo "=== C Header ==="
 if [ -f "./ffi/include/extractous.h" ]; then

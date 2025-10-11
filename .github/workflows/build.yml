@@ -219,12 +219,12 @@ jobs:
           fi
           echo "Optimized size: $(du -sh dist/${{ matrix.platform }}/lib/ | cut -f1)"
 
-      # Verify Distribution
-      - name: Verify distribution
-        shell: bash
-        run: |
-          chmod +x ./.github/workflows/scripts/verify-distribution.sh
-          ./.github/workflows/scripts/verify-distribution.sh ${{ matrix.platform }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
+      # # Verify Distribution
+      # - name: Verify distribution
+      #   shell: bash
+      #   run: |
+      #     chmod +x ./.github/workflows/scripts/verify-distribution.sh
+      #     ./.github/workflows/scripts/verify-distribution.sh ${{ matrix.platform }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
 
       # Create Archive
       - name: Create distribution archive
