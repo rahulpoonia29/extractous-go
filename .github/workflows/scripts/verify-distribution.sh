@@ -14,12 +14,18 @@ echo ""
 
 cd "dist/$PLATFORM"
 
-# Check main library
-if [ ! -f "lib/libextractous_ffi.$LIB_EXT" ]; then
-    echo "✗ Main library missing!"
+# Check main library (handle Windows naming)
+if [ "$OS" = "Windows" ]; then
+    MAIN_LIB="lib/extractous_ffi.$LIB_EXT"
+else
+    MAIN_LIB="lib/libextractous_ffi.$LIB_EXT"
+fi
+
+if [ ! -f "$MAIN_LIB" ]; then
+    echo "✗ Main library missing: $MAIN_LIB"
     exit 1
 fi
-echo "✓ Main library present"
+echo "✓ Main library present: $(basename $MAIN_LIB)"
 
 # List all libraries
 echo ""
@@ -45,6 +51,9 @@ if [ "$OS" = "Linux" ]; then
 elif [ "$OS" = "macOS" ]; then
     DYLD_LIBRARY_PATH=lib otool -L lib/libextractous_ffi.dylib
     echo "✓ Library loadable"
+    
+elif [ "$OS" = "Windows" ]; then
+    echo "✓ Windows DLL present (runtime check skipped in CI)"
 fi
 
 # Total size
