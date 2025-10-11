@@ -147,7 +147,7 @@ collect_deps() {
 }
 
 # Start from the main library
-MAIN_LIB="target/$TARGET/release/libextractous_ffi.$LIB_EXT"
+MAIN_LIB="./ffi/target/$TARGET/release/libextractous_ffi.$LIB_EXT"
 
 echo "=== Starting recursive dependency collection ==="
 echo "Main library: $MAIN_LIB"
