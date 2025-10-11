@@ -7,7 +7,39 @@ package src
 import "C"
 import "runtime"
 
-// Extractor is the main entry point for document extraction
+// Extractor is the main entry point for document extraction.
+//
+// # Thread Safety
+//
+// Extractor instances are NOT safe for concurrent use by multiple goroutines.
+// Each goroutine should create its own Extractor instance. The underlying JNI
+// layer requires thread affinity, and sharing extractors across goroutines can
+// lead to undefined behavior.
+//
+// # Memory Management
+//
+// Extractors use finalizers for automatic cleanup, but calling Close() explicitly
+// is strongly recommended for deterministic resource cleanup. Builder methods
+// (Set*) consume the receiver and return a new instance, so always use the
+// returned value.
+//
+// # Example Usage
+//
+//	// Basic extraction
+//	extractor := src.New()
+//	defer extractor.Close()
+//	content, metadata, err := extractor.ExtractFileToString("document.pdf")
+//
+//	// With configuration
+//	extractor := src.New().
+//	    SetExtractStringMaxLength(10000).
+//	    SetPdfConfig(src.NewPdfConfig().SetOcrStrategy(src.PdfOcrAuto))
+//	defer extractor.Close()
+//
+//	// Streaming large files
+//	reader, metadata, err := extractor.ExtractFile("large.pdf")
+//	defer reader.Close()
+//	// Read from reader...
 type Extractor struct {
 	ptr *C.struct_CExtractor
 }
@@ -85,6 +117,9 @@ func (e *Extractor) SetOcrConfig(config *OcrConfig) *Extractor {
 
 // SetXmlOutput sets whether to output XML structure instead of plain text
 func (e *Extractor) SetXmlOutput(xmlOutput bool) *Extractor {
+	if e == nil || e.ptr == nil {
+		return nil
+	}
 	newPtr := C.extractous_extractor_set_xml_output(e.ptr, C.bool(xmlOutput))
 	if newPtr == nil {
 		return nil
@@ -95,6 +130,10 @@ func (e *Extractor) SetXmlOutput(xmlOutput bool) *Extractor {
 
 // ExtractFileToString extracts a file's content to a string
 func (e *Extractor) ExtractFileToString(path string) (content string, metadata Metadata, err error) {
+	if e == nil || e.ptr == nil {
+		return "", nil, ErrNullPointer
+	}
+
 	cPath := cString(path)
 	defer freeString(cPath)
 
@@ -113,8 +152,12 @@ func (e *Extractor) ExtractFileToString(path string) (content string, metadata M
 	return content, metadata, nil
 }
 
-// ExtractFile extracts a file's content to a streaming reader
+// ExtractFile extracts a file's content as a streaming reader
 func (e *Extractor) ExtractFile(path string) (reader *StreamReader, metadata Metadata, err error) {
+	if e == nil || e.ptr == nil {
+		return nil, nil, ErrNullPointer
+	}
+
 	cPath := cString(path)
 	defer freeString(cPath)
 
@@ -133,6 +176,10 @@ func (e *Extractor) ExtractFile(path string) (reader *StreamReader, metadata Met
 
 // ExtractBytesToString extracts content from a byte slice to a string
 func (e *Extractor) ExtractBytesToString(data []byte) (content string, metadata Metadata, err error) {
+	if e == nil || e.ptr == nil {
+		return "", nil, ErrNullPointer
+	}
+
 	if len(data) == 0 {
 		return "", make(Metadata), nil
 	}
@@ -161,6 +208,10 @@ func (e *Extractor) ExtractBytesToString(data []byte) (content string, metadata 
 
 // ExtractBytes extracts content from a byte slice to a streaming reader
 func (e *Extractor) ExtractBytes(data []byte) (reader *StreamReader, metadata Metadata, err error) {
+	if e == nil || e.ptr == nil {
+		return nil, nil, ErrNullPointer
+	}
+
 	if len(data) == 0 {
 		return nil, make(Metadata), nil
 	}
@@ -187,6 +238,10 @@ func (e *Extractor) ExtractBytes(data []byte) (reader *StreamReader, metadata Me
 
 // ExtractUrlToString extracts content from a URL to a string
 func (e *Extractor) ExtractUrlToString(url string) (content string, metadata Metadata, err error) {
+	if e == nil || e.ptr == nil {
+		return "", nil, ErrNullPointer
+	}
+
 	cUrl := cString(url)
 	defer freeString(cUrl)
 
@@ -208,6 +263,10 @@ func (e *Extractor) ExtractUrlToString(url string) (content string, metadata Met
 
 // ExtractUrl extracts content from a URL as a streaming reader
 func (e *Extractor) ExtractUrl(url string) (reader *StreamReader, metadata Metadata, err error) {
+	if e == nil || e.ptr == nil {
+		return nil, nil, ErrNullPointer
+	}
+
 	cUrl := cString(url)
 	defer freeString(cUrl)
 

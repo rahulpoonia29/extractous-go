@@ -1,6 +1,6 @@
 package extractous
 
-import "extractous-go/src"
+import "github.com/rahulpoonia29/extractous-go/src"
 
 // Re-export main types for convenience
 type (

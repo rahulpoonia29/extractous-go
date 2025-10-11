@@ -7,14 +7,14 @@ package src
 #cgo CFLAGS: -I${SRCDIR}/../include
 
 // Linux
-#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../native/linux_amd64 -lextractous_ffi -Wl,-rpath,${SRCDIR}/../native/linux_amd64
-#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../native/linux_arm64 -lextractous_ffi -Wl,-rpath,${SRCDIR}/../native/linux_arm64
+#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../native/linux_amd64 -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath=${SRCDIR}/../native/linux_amd64
+#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../native/linux_arm64 -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath=${SRCDIR}/../native/linux_arm64
 
 // macOS
-#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../native/darwin_amd64 -lextractous_ffi -Wl,-rpath,${SRCDIR}/../native/darwin_amd64
-#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../native/darwin_arm64 -lextractous_ffi -Wl,-rpath,${SRCDIR}/../native/darwin_arm64
+#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../native/darwin_amd64 -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/../native/darwin_amd64
+#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../native/darwin_arm64 -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/../native/darwin_arm64
 
-// Windows (RPATH not used)
+// Windows (no RPATH, different system libraries)
 #cgo windows,amd64 LDFLAGS: -L${SRCDIR}/../native/windows_amd64 -lextractous_ffi
 
 #include <stdlib.h>

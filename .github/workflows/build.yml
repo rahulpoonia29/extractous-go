@@ -43,12 +43,12 @@ jobs:
           #   os_name: macOS
           #   archive_ext: tar.gz
             
-          # - os: macos-latest
-          #   platform: darwin_arm64
-          #   target: aarch64-apple-darwin
-          #   lib_ext: dylib
-          #   os_name: macOS
-          #   archive_ext: tar.gz
+          - os: macos-latest
+            platform: darwin_arm64
+            target: aarch64-apple-darwin
+            lib_ext: dylib
+            os_name: macOS
+            archive_ext: tar.gz
 
     steps:
       - name: Checkout repository
