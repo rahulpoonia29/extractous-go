@@ -60,7 +60,7 @@ jobs:
         run: |
           echo Verifying Visual Studio C++ compiler...
           where cl.exe
-          cl.exe /Bv
+          cl.exe 2>&1
           echo Visual Studio environment ready
 
       # Install Rust
