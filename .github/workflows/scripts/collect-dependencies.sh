@@ -19,27 +19,21 @@ echo ""
 mkdir -p "dist/$PLATFORM/lib"
 mkdir -p "dist/$PLATFORM/include"
 
-# Find all extractous build directories and select the most recently modified one
-echo "Searching for extractous build directories..."
+# Find the extractous build directory that contains actual libraries
+echo "Searching for libtika_native.$LIB_EXT..."
+TIKA_LIB=$(find "./ffi/target/$TARGET/release/build" -type f -name "libtika_native.$LIB_EXT" 2>/dev/null | head -1)
 
-# Use ls -t for cross-platform sorting by modification time
-BUILD_DIR=$(ls -dt ./ffi/target/$TARGET/release/build/extractous-*/ 2>/dev/null | head -1 | sed 's:/$::')
-
-if [ -z "$BUILD_DIR" ]; then
-    echo "✗ Error: Could not find any extractous-* build directories"
-    echo "Available directories:"
-    ls -la "./ffi/target/$TARGET/release/build/" 2>/dev/null || true
+if [ -z "$TIKA_LIB" ]; then
+    echo "✗ Error: Could not find libtika_native.$LIB_EXT in build outputs"
+    echo "Searching for any extractous build directories..."
+    find "./ffi/target/$TARGET/release/build" -maxdepth 2 -name "extractous-*" -type d
     exit 1
 fi
 
-echo "Latest build directory: $BUILD_DIR"
-echo "Modified: $(stat -c '%y' "$BUILD_DIR" 2>/dev/null || stat -f '%Sm' "$BUILD_DIR" 2>/dev/null || echo "unknown")"
+LIB_DIR=$(dirname "$TIKA_LIB")
+BUILD_DIR=$(dirname "$(dirname "$LIB_DIR")")  # Go up two levels from libs to get build dir
 
-# Find GraalVM libraries directory
-GRAALVM_DIR="$BUILD_DIR/out"
-LIB_DIR="$GRAALVM_DIR/libs"
-
-echo "GraalVM directory: $GRAALVM_DIR"
+echo "Build directory: $BUILD_DIR"
 echo "Libraries directory: $LIB_DIR"
 echo ""
 
@@ -65,9 +59,45 @@ echo ""
 echo "=== libtika_native and Dependencies ==="
 
 if [ -d "$LIB_DIR" ]; then
-    # Check if directory has any libraries
-    LIB_COUNT=$(ls -1 "$LIB_DIR"/*."$LIB_EXT" 2>/dev/null | wc -l)
+    # Show what we found
+    echo "Found libraries:"
+    ls -lh "$LIB_DIR"/*."$LIB_EXT" 2>/dev/null || true
+    echo ""
     
+    # Copy all libraries
+    LIB_COUNT=$(ls -1 "$LIB_DIR"/*."$LIB_EXT" 2>/dev/null | wc -l)
+    if [ "$LIB_COUNT" -gt 0 ]; then
+        cp "$LIB_DIR"/*."$LIB_EXT" "dist/$PLATFORM/lib/"
+        echo "✓ Copied $LIB_COUNT libraries from $LIB_DIR"
+    else
+        echo "⚠ Warning: No .$LIB_EXT files found in $LIB_DIR"
+    fi
+else
+    echo "✗ Error: Library directory not found: $LIB_DIR"
+    exit 1
+fi
+
+# 3. Copy header
+echo ""
+echo "=== C Header ==="
+
+if [ -f "./ffi/include/extractous.h" ]; then
+    cp "./ffi/include/extractous.h" "dist/$PLATFORM/include/"
+    echo "✓ Copied extractous.h"
+else
+    echo "⚠ Warning: extractous.h not found"
+fi
+
+# Summary
+echo ""
+echo "=== Summary ==="
+echo "Libraries: $(find dist/$PLATFORM/lib -name "*.$LIB_EXT" 2>/dev/null | wc -l)"
+echo "Size: $(du -sh dist/$PLATFORM/lib 2>/dev/null | cut -f1)"
+echo ""
+echo "Final distribution contents:"
+ls -lh "dist/$PLATFORM/lib/"
+echo ""
+echo "✓ Collection complete"    
     if [ "$LIB_COUNT" -gt 0 ]; then
         echo "Found libraries:"
         ls -lh "$LIB_DIR"/*."$LIB_EXT"
