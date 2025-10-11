@@ -12,7 +12,12 @@ echo "=== Build Verification ==="
 echo "Target: $TARGET | Ext: $LIB_EXT | OS: $OS"
 echo ""
 
-MAIN_LIB="./ffi/target/$TARGET/release/libextractous_ffi.$LIB_EXT"
+# Windows DLLs don't have 'lib' prefix, Unix libs do
+if [ "$OS" = "Windows" ]; then
+    MAIN_LIB="./ffi/target/$TARGET/release/extractous_ffi.$LIB_EXT"
+else
+    MAIN_LIB="./ffi/target/$TARGET/release/libextractous_ffi.$LIB_EXT"
+fi
 
 if [ -f "$MAIN_LIB" ]; then
     echo "✓ Main library found"

@@ -34,7 +34,12 @@ echo ""
 
 # 1. Copy main FFI library
 echo "=== Main FFI Library ==="
-MAIN_LIB="./ffi/target/$TARGET/release/libextractous_ffi.$LIB_EXT"
+
+if [ "$OS" = "Windows" ]; then
+    MAIN_LIB="./ffi/target/$TARGET/release/extractous_ffi.$LIB_EXT"
+else
+    MAIN_LIB="./ffi/target/$TARGET/release/libextractous_ffi.$LIB_EXT"
+fi
 
 if [ -f "$MAIN_LIB" ]; then
     cp "$MAIN_LIB" "dist/$PLATFORM/lib/"
