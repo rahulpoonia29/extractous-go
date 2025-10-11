@@ -78,15 +78,22 @@ jobs:
           distribution: 'graalvm-community'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: 'false'
-          components: 'native-image'
           set-java-home: 'true'
 
-      - name: Verify GraalVM installation
-        shell: bash
+      - name: Verify native-image (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          echo "JAVA_HOME: $JAVA_HOME"
+          Write-Host "GRAALVM_HOME: $env:GRAALVM_HOME"
+          Write-Host "JAVA_HOME: $env:JAVA_HOME"
+          & "$env:GRAALVM_HOME\bin\native-image.cmd" --version
+
+      - name: Verify native-image (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
           echo "GRAALVM_HOME: $GRAALVM_HOME"
-          java -version
+          echo "JAVA_HOME: $JAVA_HOME"
+          java --version
           native-image --version
 
       # Rust Toolchain
