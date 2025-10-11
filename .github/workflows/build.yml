@@ -64,7 +64,7 @@ jobs:
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y build-essential pkg-config libssl-dev
+          sudo apt-get install -y build-essential pkg-config libssl-dev tree
 
       - name: Install Xcode Command Line Tools (macOS)
         if: runner.os == 'macOS'
@@ -110,6 +110,52 @@ jobs:
           workspaces: "./ffi -> target"
           cache-on-failure: true
 
+      - name: Cache GraalVM Native Image
+        id: cache-graalvm
+        uses: actions/cache@v4
+        with:
+          path: |
+            ffi/target/${{ matrix.target }}/release/build/extractous-*/out
+          key: graalvm-v3-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock', 'ffi/Cargo.toml') }}
+          restore-keys: |
+            graalvm-v3-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Fix cached artifact timestamps
+        if: steps.cache-graalvm.outputs.cache-hit == 'true'
+        shell: bash
+        run: |
+          echo "=== Cache HIT - Fixing timestamps to prevent rebuild ==="
+          
+          # Update all cached artifacts to current time
+          BUILD_CACHE="./ffi/target/${{ matrix.target }}/release/build"
+          
+          if [ -d "$BUILD_CACHE" ]; then
+            # Touch all files in the extractous build directory
+            find "$BUILD_CACHE" -type d -name "extractous-*" -exec find {} -type f -exec touch {} + 2>/dev/null || true
+            
+            # Specifically ensure libtika_native has fresh timestamp
+            TIKA_LIB=$(find "$BUILD_CACHE" -name "libtika_native.*" -o -name "tika_native.*" 2>/dev/null | head -1)
+            if [ -f "$TIKA_LIB" ]; then
+              touch "$TIKA_LIB"
+              echo "✓ Updated timestamp: $(basename $TIKA_LIB) - $(date -r "$TIKA_LIB" '+%Y-%m-%d %H:%M:%S')"
+            fi
+            
+            # Also touch the fingerprint files that Cargo uses
+            find "$BUILD_CACHE" -name ".fingerprint" -type d -exec find {} -type f -exec touch {} + 2>/dev/null || true
+            
+            echo "✓ All cached artifacts updated"
+          fi
+
+      - name: Cache status
+        shell: bash
+        run: |
+          if [ "${{ steps.cache-graalvm.outputs.cache-hit }}" = "true" ]; then
+            echo "✓ GraalVM cache HIT - Native image should not recompile"
+          else
+            echo "⚠ GraalVM cache MISS - Full native image compilation (~5-6 minutes)"
+          fi
+
+
       # For Unix-based systems (Linux/macOS)
       - name: Build FFI library (Unix)
         if: runner.os != 'Windows'
@@ -122,6 +168,7 @@ jobs:
           BUILD_TIME=$((BUILD_END - BUILD_START))
           echo "Build completed in ${BUILD_TIME}s"
           echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_ENV
+          tree -P "*.so|*.rs" --purge
         env:
           RUST_BACKTRACE: 1
 
@@ -137,6 +184,11 @@ jobs:
           $BUILD_TIME = $BUILD_END - $BUILD_START
           Write-Host "Build completed in $BUILD_TIME seconds"
           "BUILD_TIME=$BUILD_TIME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Get-ChildItem -Recurse -Include *.dll, *.lib, *.rs | ForEach-Object {
+            $relative = $_.FullName.Substring((Get-Location).Path.Length + 1)
+            $indent = ($relative.Split([IO.Path]::DirectorySeparatorChar).Count - 1) * '  '
+            Write-Host ("{0}{1}" -f $indent, $_.Name)
+          }
         env:
           RUST_BACKTRACE: 1
 
