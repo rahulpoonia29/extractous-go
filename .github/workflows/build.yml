@@ -25,11 +25,11 @@ jobs:
             lib_ext: so
             os_name: Linux
             
-          # - os: windows-latest
-          #   platform: windows_amd64
-          #   target: x86_64-pc-windows-msvc
-          #   lib_ext: dll
-          #   os_name: Windows
+          - os: windows-latest
+            platform: windows_amd64
+            target: x86_64-pc-windows-msvc
+            lib_ext: dll
+            os_name: Windows
             
           # - os: macos-13
           #   platform: darwin_amd64
@@ -189,8 +189,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: extractous-ffi-${{ matrix.platform }}
-          path: ffi/dist/${{ matrix.platform }}
-          retention-days: 30
+          path: dist/${{ matrix.platform }}
+          retention-days: 5
           compression-level: 6
 
       # Build summary
@@ -210,100 +210,3 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "📦 \`extractous-ffi-${{ matrix.platform }}\` - Distribution ready libraries" >> $GITHUB_STEP_SUMMARY
-
-  # # Create combined release bundle with all platforms
-  # create-release:
-  #   name: Create Release Bundle
-  #   needs: ffi-build
-  #   runs-on: ubuntu-latest
-  #   if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing-workflow')
-    
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-      
-  #     - name: Download all platform artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         path: artifacts
-      
-  #     - name: Display artifact structure
-  #       run: |
-  #         echo "=== Downloaded artifacts structure ==="
-  #         tree artifacts/ || find artifacts/ -type f
-  #         echo ""
-  #         echo "=== Artifact sizes ==="
-  #         du -sh artifacts/*
-      
-  #     - name: Create platform-specific archives
-  #       shell: bash
-  #       run: |
-  #         cd artifacts
-  #         echo "Creating compressed archives for each platform..."
-          
-  #         for platform in linux_amd64 windows_amd64 darwin_amd64 darwin_arm64; do
-  #           if [ -d "extractous-ffi-$platform" ]; then
-  #             echo "Creating archive for $platform..."
-  #             cd "extractous-ffi-$platform"
-  #             tar czf "../extractous-ffi-$platform.tar.gz" .
-  #             cd ..
-              
-  #             # Calculate checksum
-  #             sha256sum "extractous-ffi-$platform.tar.gz" > "extractous-ffi-$platform.tar.gz.sha256"
-              
-  #             echo "✓ Created extractous-ffi-$platform.tar.gz"
-  #           else
-  #             echo "⚠ Platform $platform not found, skipping..."
-  #           fi
-  #         done
-          
-  #         echo ""
-  #         echo "=== Created archives ==="
-  #         ls -lh *.tar.gz
-          
-  #         echo ""
-  #         echo "=== Checksums ==="
-  #         cat *.sha256
-      
-  #     - name: Upload combined artifacts
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: extractous-ffi-all-platforms
-  #         path: |
-  #           artifacts/*.tar.gz
-  #           artifacts/*.sha256
-  #         retention-days: 90
-  #         compression-level: 0
-          
-  #     - name: Release summary
-  #       shell: bash
-  #       run: |
-  #         echo "## Multi-Platform Release Complete" >> $GITHUB_STEP_SUMMARY
-  #         echo "" >> $GITHUB_STEP_SUMMARY
-  #         echo "All platforms built and packaged successfully!" >> $GITHUB_STEP_SUMMARY
-  #         echo "" >> $GITHUB_STEP_SUMMARY
-  #         echo "### Platforms" >> $GITHUB_STEP_SUMMARY
-          
-  #         cd artifacts
-  #         for platform in linux_amd64 windows_amd64 darwin_amd64 darwin_arm64; do
-  #           if [ -f "extractous-ffi-$platform.tar.gz" ]; then
-  #             size=$(du -h "extractous-ffi-$platform.tar.gz" | cut -f1)
-  #             checksum=$(cat "extractous-ffi-$platform.tar.gz.sha256" | cut -d' ' -f1 | cut -c1-16)
-              
-  #             case $platform in
-  #               linux_amd64)   echo "- **Linux AMD64** - $size (SHA256: \`${checksum}...\`)" >> $GITHUB_STEP_SUMMARY ;;
-  #               windows_amd64) echo "- **Windows AMD64** - $size (SHA256: \`${checksum}...\`)" >> $GITHUB_STEP_SUMMARY ;;
-  #               darwin_amd64)  echo "- **macOS AMD64** (Intel) - $size (SHA256: \`${checksum}...\`)" >> $GITHUB_STEP_SUMMARY ;;
-  #               darwin_arm64)  echo "- **macOS ARM64** (Apple Silicon) - $size (SHA256: \`${checksum}...\`)" >> $GITHUB_STEP_SUMMARY ;;
-  #             esac
-  #           fi
-  #         done
-          
-  #         echo "" >> $GITHUB_STEP_SUMMARY
-  #         echo "### Download" >> $GITHUB_STEP_SUMMARY
-  #         echo "📦 Combined archive: \`extractous-ffi-all-platforms\`" >> $GITHUB_STEP_SUMMARY
-  #         echo "" >> $GITHUB_STEP_SUMMARY
-  #         echo "Each platform archive includes:" >> $GITHUB_STEP_SUMMARY
-  #         echo "- Native libraries (\`.so\`, \`.dll\`, or \`.dylib\`)" >> $GITHUB_STEP_SUMMARY
-  #         echo "- Header files (\`.h\`)" >> $GITHUB_STEP_SUMMARY
-  #         echo "- SHA256 checksums for verification" >> $GITHUB_STEP_SUMMARY
