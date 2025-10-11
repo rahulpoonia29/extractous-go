@@ -50,11 +50,20 @@ fn generate_header(crate_dir: &str, root_dir: &PathBuf) {
 
 fn set_rpath() {
     let target = env::var("TARGET").unwrap();
-
+    
     if target.contains("linux") {
+        // All libs will be in same directory
         println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
-        println!("cargo:rustc-link-arg=-Wl,--enable-new-dtags");
+        println!("cargo:rustc-link-arg=-Wl,-z,origin");
+        println!("cargo:rustc-link-arg=-Wl,--disable-new-dtags");
+        
     } else if target.contains("darwin") {
+        // All libs will be in same directory
         println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
+        println!("cargo:rustc-link-arg=-Wl,-install_name,@rpath/libextractous_ffi.dylib");
+        
+    } else if target.contains("windows") {
+        // Windows searches current directory by default
+        // No special configuration needed
     }
 }

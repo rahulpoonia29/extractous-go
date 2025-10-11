@@ -11,8 +11,11 @@ env:
   RUST_VERSION: "1.90.0"
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+
 jobs:
-  ffi-build:
+  build:
     name: Build ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -24,73 +27,75 @@ jobs:
             target: x86_64-unknown-linux-gnu
             lib_ext: so
             os_name: Linux
+            archive_ext: tar.gz
             
           - os: windows-latest
             platform: windows_amd64
             target: x86_64-pc-windows-msvc
             lib_ext: dll
             os_name: Windows
-
+            archive_ext: zip
+            
           # - os: macos-13
           #   platform: darwin_amd64
           #   target: x86_64-apple-darwin
           #   lib_ext: dylib
           #   os_name: macOS
+          #   archive_ext: tar.gz
             
           # - os: macos-latest
           #   platform: darwin_arm64
           #   target: aarch64-apple-darwin
           #   lib_ext: dylib
           #   os_name: macOS
+          #   archive_ext: tar.gz
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # Windows-specific: Setup Visual Studio Build Environment
-      - name: Setup Visual Studio Developer Command Prompt
+      # Platform-specific Setup
+      - name: Setup Visual Studio (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      # Install Rust
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: ${{ matrix.target }}
-
-      # Linux-specific dependencies
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libssl-dev
+          sudo apt-get install -y build-essential pkg-config libssl-dev
 
-      - name: Setup GraalVM (Windows)
-        if: runner.os == 'Windows'
-        uses: graalvm/setup-graalvm@v1.4.1
+      - name: Install Xcode Command Line Tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          xcode-select --install 2>/dev/null || true
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
         with:
           java-version: '21'
-          distribution: 'graalvm'
+          distribution: 'graalvm-community'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: 'false'
           components: 'native-image'
           set-java-home: 'true'
 
-      - name: Setup GraalVM (Non-Windows)
-        if: runner.os != 'Windows'
-        uses: graalvm/setup-graalvm@v1.4.1
-        with:
-          java-version: '21'
-          distribution: 'graalvm'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          native-image-job-reports: 'false'
+      - name: Verify GraalVM installation
+        shell: bash
+        run: |
+          echo "JAVA_HOME: $JAVA_HOME"
+          echo "GRAALVM_HOME: $GRAALVM_HOME"
+          java -version
+          native-image --version
 
-      # Rust caching
+      # Rust Toolchain
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.target }}
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -98,94 +103,102 @@ jobs:
           workspaces: "./ffi -> target"
           cache-on-failure: true
 
-      - name: Verify environment
-        shell: bash
-        run: |
-          echo "### Build Environment" >> $GITHUB_STEP_SUMMARY
-          echo "- **Rust:** $(rustc --version)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Cargo:** $(cargo --version)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Target:** ${{ matrix.target }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Platform:** ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-      # CRITICAL FIX: Remove Git's conflicting link.exe before build
-      - name: Fix Windows link.exe conflict
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          echo "Removing conflicting Git link.exe..."
-          rm -f /usr/bin/link.exe
-          which link.exe || echo "✓ Visual Studio link.exe will be used"
-
-      # Build the FFI library
-      - name: Build extractous FFI
+      # For Unix-based systems (Linux/macOS)
+      - name: Build FFI library (Unix)
+        if: runner.os != 'Windows'
         working-directory: ./ffi
         shell: bash
         run: |
-          set -e
-          echo "=== Building extractous FFI for ${{ matrix.target }} ==="
-          BUILD_START_TIME=$(date +%s)
-          
+          BUILD_START=$(date +%s)
           cargo build --release --target ${{ matrix.target }} --quiet
-          
-          BUILD_END_TIME=$(date +%s)
-          BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
-          echo "Build completed in ${BUILD_DURATION}s"
-          echo "BUILD_DURATION=${BUILD_DURATION}" >> $GITHUB_ENV
+          BUILD_END=$(date +%s)
+          BUILD_TIME=$((BUILD_END - BUILD_START))
+          echo "Build completed in ${BUILD_TIME}s"
+          echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_ENV
+        env:
+          RUST_BACKTRACE: 1
 
-      # Verify build outputs
+      # For Windows
+      - name: Build FFI library (Windows)
+        if: runner.os == 'Windows'
+        working-directory: ./ffi
+        shell: pwsh
+        run: |
+          $BUILD_START = (Get-Date).ToUniversalTime().ToUnixTimeSeconds()
+          cargo build --release --target ${{ matrix.target }} --quiet
+          $BUILD_END = (Get-Date).ToUniversalTime().ToUnixTimeSeconds()
+          $BUILD_TIME = $BUILD_END - $BUILD_START
+          Write-Host "Build completed in $BUILD_TIME seconds"
+          "BUILD_TIME=$BUILD_TIME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        env:
+          RUST_BACKTRACE: 1
+
+
+      # Verify Build
       - name: Verify build outputs
         shell: bash
         run: |
           chmod +x ./.github/workflows/scripts/verify-build.sh
-          ./.github/workflows/scripts/verify-build.sh \
-            "${{ matrix.target }}" \
-            "${{ matrix.lib_ext }}" \
-            "${{ matrix.os_name }}"
+          ./.github/workflows/scripts/verify-build.sh ${{ matrix.target }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
 
-      # Collect distribution artifacts
-      - name: Collect distribution artifacts
+      # Collect Dependencies
+      - name: Collect dependencies
         shell: bash
         run: |
           chmod +x ./.github/workflows/scripts/collect-dependencies.sh
-          ./.github/workflows/scripts/collect-dependencies.sh \
-            "${{ matrix.platform }}" \
-            "${{ matrix.target }}" \
-            "${{ matrix.lib_ext }}" \
-            "${{ matrix.os_name }}"
+          ./.github/workflows/scripts/collect-dependencies.sh ${{ matrix.platform }} ${{ matrix.target }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
 
-      # Verify distribution artifacts
-      - name: Verify distribution artifacts
+      # Optimize Libraries
+      - name: Strip debug symbols (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [ "${{ matrix.os_name }}" = "Linux" ]; then
+            find dist/${{ matrix.platform }}/lib -name "*.so" -exec strip --strip-debug {} \;
+          elif [ "${{ matrix.os_name }}" = "macOS" ]; then
+            find dist/${{ matrix.platform }}/lib -name "*.dylib" -exec strip -x {} \;
+          fi
+          echo "Optimized size: $(du -sh dist/${{ matrix.platform }}/lib/ | cut -f1)"
+
+      # Verify Distribution
+      - name: Verify distribution
         shell: bash
         run: |
           chmod +x ./.github/workflows/scripts/verify-distribution.sh
-          ./.github/workflows/scripts/verify-distribution.sh \
-            "${{ matrix.platform }}" \
-            "${{ matrix.lib_ext }}"
+          ./.github/workflows/scripts/verify-distribution.sh ${{ matrix.platform }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
 
-      # Upload with optimal compression
-      - name: Upload FFI distribution artifacts
+      # Create Archive
+      - name: Create distribution archive
+        shell: bash
+        run: |
+          cd dist/${{ matrix.platform }}
+          
+          if [ "${{ matrix.os_name }}" = "Windows" ]; then
+            7z a ../../extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }} lib/ include/
+          else
+            tar -czf ../../extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }} lib/ include/
+          fi
+          
+          cd ../..
+          ls -lh extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}
+
+      # Generate Checksums
+      - name: Generate checksums
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            certutil -hashfile extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }} SHA256 > extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}.sha256
+          else
+            shasum -a 256 extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }} > extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}.sha256
+          fi
+          cat extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}.sha256
+
+      # Upload Artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: extractous-ffi-${{ matrix.platform }}
-          path: dist/${{ matrix.platform }}
-          retention-days: 7
-          compression-level: 9
-          if-no-files-found: error
-
-      # Build summary
-      - name: Build summary
-        shell: bash
-        run: |
-          echo "## ✓ Build Complete - ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Platform** | ${{ matrix.platform }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Target** | ${{ matrix.target }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **OS** | ${{ matrix.os }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Build Duration** | ${BUILD_DURATION}s |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Library Extension** | .${{ matrix.lib_ext }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "📦 \`extractous-ffi-${{ matrix.platform }}\` - Distribution ready libraries" >> $GITHUB_STEP_SUMMARY
+          path: |
+            extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}
+            extractous-ffi-${{ matrix.platform }}.${{ matrix.archive_ext }}.sha256
+          retention-days: 3

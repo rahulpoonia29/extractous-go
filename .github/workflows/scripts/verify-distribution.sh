@@ -2,39 +2,55 @@
 set -e
 
 # Verify distribution artifacts
-# Usage: ./verify-distribution.sh <platform> <lib_ext>
+# Usage: ./verify-distribution.sh <platform> <lib_ext> <os>
 
 PLATFORM=$1
 LIB_EXT=$2
+OS=$3
 
-echo "=== Distribution Verification Script ==="
-echo "Platform: $PLATFORM"
-echo "Library extension: $LIB_EXT"
+echo "=== Distribution Verification ==="
+echo "Platform: $PLATFORM | Ext: $LIB_EXT | OS: $OS"
 echo ""
 
 cd "dist/$PLATFORM"
 
-echo "=== Verifying distribution artifacts ==="
-
+# Check main library
 if [ ! -f "lib/libextractous_ffi.$LIB_EXT" ]; then
-  echo "✗ Main library missing from distribution!"
-  exit 1
+    echo "✗ Main library missing!"
+    exit 1
 fi
-
 echo "✓ Main library present"
-echo "Library size: $(du -h lib/libextractous_ffi.$LIB_EXT | cut -f1)"
 
+# List all libraries
 echo ""
-echo "=== All libraries in distribution ==="
+echo "=== Libraries ==="
 find lib -name "*.$LIB_EXT" -type f -exec basename {} \; | sort
 
+# Size breakdown
 echo ""
-echo "=== Library details ==="
-ls -lh lib/*.$LIB_EXT 2>/dev/null || ls -lh lib/
+echo "=== Size Breakdown ==="
+for lib in lib/*.$LIB_EXT; do
+    printf "%-40s %10s\n" "$(basename $lib)" "$(du -h $lib | cut -f1)"
+done | sort -k2 -h -r
 
+# Test library loading
 echo ""
-echo "=== Total distribution size ==="
+echo "=== Runtime Test ==="
+if [ "$OS" = "Linux" ]; then
+    LD_LIBRARY_PATH=lib:$LD_LIBRARY_PATH ldd lib/libextractous_ffi.so | grep "not found" && {
+        echo "✗ Unresolved dependencies!"
+        exit 1
+    } || echo "✓ All dependencies resolved"
+    
+elif [ "$OS" = "macOS" ]; then
+    DYLD_LIBRARY_PATH=lib otool -L lib/libextractous_ffi.dylib
+    echo "✓ Library loadable"
+fi
+
+# Total size
+echo ""
+echo "=== Total Distribution ==="
 du -sh .
 
 echo ""
-echo "✓ Distribution verification completed successfully"
+echo "✓ Distribution verified"
