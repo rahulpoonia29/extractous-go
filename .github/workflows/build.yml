@@ -54,6 +54,22 @@ jobs:
         with:
           arch: x64
 
+      - name: Remove Git's link.exe from PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Git's link.exe conflicts with Visual Studio's link.exe
+          # Remove Git's /usr/bin from PATH to prevent conflicts
+          $gitPath = "C:\Program Files\Git\usr\bin"
+          $env:PATH = ($env:PATH.Split(';') | Where-Object { $_ -ne $gitPath }) -join ';'
+          
+          # Verify correct link.exe is in PATH
+          Write-Host "Link.exe location:"
+          (Get-Command link.exe).Path
+          
+          # Save updated PATH for subsequent steps
+          echo "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       # Install Rust
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

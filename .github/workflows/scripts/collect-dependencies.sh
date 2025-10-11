@@ -191,7 +191,7 @@ collect_deps() {
 }
 
 # Start from the main library
-MAIN_LIB="./ffitarget/$TARGET/release/libextractous_ffi.$LIB_EXT"
+MAIN_LIB="./ffi/target/$TARGET/release/libextractous_ffi.$LIB_EXT"
 
 if [ ! -f "$MAIN_LIB" ]; then
   echo "Error: Main library not found: $MAIN_LIB"
