@@ -131,9 +131,9 @@ jobs:
         working-directory: ./ffi
         shell: pwsh
         run: |
-          $BUILD_START = (Get-Date).ToUniversalTime().ToUnixTimeSeconds()
+          $BUILD_START = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           cargo build --release --target ${{ matrix.target }} --quiet
-          $BUILD_END = (Get-Date).ToUniversalTime().ToUnixTimeSeconds()
+          $BUILD_END = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           $BUILD_TIME = $BUILD_END - $BUILD_START
           Write-Host "Build completed in $BUILD_TIME seconds"
           "BUILD_TIME=$BUILD_TIME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
