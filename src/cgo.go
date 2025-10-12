@@ -1,21 +1,27 @@
 //go:build windows || darwin || linux
 // +build windows darwin linux
 
+//go:generate go run check_native_libs.go
+
 package src
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../include
 
 // Linux
-#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../native/linux_amd64 -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath=${SRCDIR}/../native/linux_amd64
-#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../native/linux_arm64 -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath=${SRCDIR}/../native/linux_arm64
+#cgo linux,amd64 CFLAGS: -I${SRCDIR}/../native/linux_amd64/include
+#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../native/linux_amd64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/../native/linux_amd64/lib
+#cgo linux,arm64 CFLAGS: -I${SRCDIR}/../native/linux_arm64/include
+#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../native/linux_arm64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/../native/linux_arm64/lib
 
 // macOS
-#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../native/darwin_amd64 -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/../native/darwin_amd64
-#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../native/darwin_arm64 -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/../native/darwin_arm64
+#cgo darwin,amd64 CFLAGS: -I${SRCDIR}/../native/darwin_amd64/include
+#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/../native/darwin_amd64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/../native/darwin_amd64/lib
+#cgo darwin,arm64 CFLAGS: -I${SRCDIR}/../native/darwin_arm64/include
+#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../native/darwin_arm64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/../native/darwin_arm64/lib
 
-// Windows (no RPATH, different system libraries)
-#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/../native/windows_amd64 -lextractous_ffi
+// Windows
+#cgo windows,amd64 CFLAGS: -I${SRCDIR}/../native/windows_amd64/include
+#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/../native/windows_amd64/lib -lextractous_ffi
 
 #include <stdlib.h>
 #include <extractous.h>
@@ -26,17 +32,10 @@ import (
 	"unsafe"
 )
 
-// init sets up library paths for runtime linking
+// init locks the OS thread for JNI compatibility.
+// The native libraries are expected to be in the ./native directory.
 func init() {
-	// Ensure native libraries are in the search path
-	setupLibraryPaths()
-}
-
-// setupLibraryPaths configures OS-specific library search paths
-func setupLibraryPaths() {
-	// Platform-specific library loading is handled by RPATH on Unix
-	// and by PATH on Windows (see internal/loader package)
-	runtime.LockOSThread() // Lock to ensure JNI thread attachment works
+	runtime.LockOSThread()
 }
 
 // Helper functions for C interop
