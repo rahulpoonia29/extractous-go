@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/rahulpoonia29/extractous-go/src"
+	"github.com/rahulpoonia29/extractous-go"
 )
 
 func main() {

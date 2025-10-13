@@ -5,7 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'ffi/**'
-      - 'src/**'
+      - '*.go'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/build.yml'
