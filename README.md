@@ -6,7 +6,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/rahulpoonia29/extractous-go.svg)](https://pkg.go.dev/github.com/rahulpoonia29/extractous-go)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-<img src="https://img.shields.io/github/commit-activity/m/rahulpoonia29/extractous-go" alt="Commits per month">
+<img src="https://github.com/rahulpoonia29/extractous-go/actions/workflows/build.yml/badge.svg?branch=main" alt="Build">
 
 </div>
 

@@ -47,35 +47,52 @@ jobs:
             echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
       
-      - name: Download all platform artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: extractous-ffi-*
-          merge-multiple: false
       
-      - name: Create platform archives
+      - name: List downloaded artifacts
         shell: bash
         run: |
-          cd artifacts
+          echo "Downloaded artifacts:"
+          ls -R artifacts
+      
+      - name: Package per-platform archives
+        id: package
+        shell: bash
+        run: |
+          set -e
+          mkdir -p release
           
-          for platform in linux_amd64 windows_amd64 darwin_arm64; do
-            if [ -d "extractous-ffi-$platform" ]; then
-              echo "Creating archive for $platform..."
-              cd "extractous-ffi-$platform"
-              tar czf "../extractous-ffi-$platform.tar.gz" lib/ include/
-              cd ..
+          echo "Creating per-platform release archives..."
+          
+          # Package each platform separately
+          for platform_dir in artifacts/extractous-ffi-*; do
+            if [ -d "$platform_dir" ]; then
+              platform=$(basename "$platform_dir" | sed 's/extractous-ffi-//')
+              
+              echo "Packaging $platform..."
+              
+              # Determine archive extension based on platform
+              if [[ "$platform" == windows_* ]]; then
+                archive_name="extractous-ffi-${platform}.zip"
+                (cd "$platform_dir" && zip -r "../../release/$archive_name" .)
+              else
+                archive_name="extractous-ffi-${platform}.tar.gz"
+                tar -czf "release/$archive_name" -C "$platform_dir" .
+              fi
               
               # Generate checksum
-              sha256sum "extractous-ffi-$platform.tar.gz" > "extractous-ffi-$platform.tar.gz.sha256"
+              (cd release && sha256sum "$archive_name" > "${archive_name}.sha256")
               
-              echo "✓ Created extractous-ffi-$platform.tar.gz"
+              echo "  ✓ Created $archive_name"
             fi
           done
           
           echo ""
-          echo "=== Created archives ==="
-          ls -lh *.tar.gz 2>/dev/null || echo "No archives created"
+          echo "Release assets:"
+          ls -lh release/
       
       - name: Generate release notes
         id: release-notes
@@ -83,54 +100,63 @@ jobs:
         run: |
           TAG_NAME="${{ steps.tag.outputs.tag_name }}"
           
-          cat > release_notes.md <<EOF
-          # Extractous Go FFI ${TAG_NAME}
+          cat > release_notes.md <<'EOF'
+          # Extractous Go FFI ${{ steps.tag.outputs.tag_name }}
           
-          Multi-platform native library binaries for extractous-go.
-          
-          ## Platforms
-          
-          - **Linux AMD64** - \`extractous-ffi-linux_amd64.tar.gz\`
-          - **Windows AMD64** - \`extractous-ffi-windows_amd64.tar.gz\`
-          - **macOS Apple Silicon** - \`extractous-ffi-darwin_arm64.tar.gz\`
+          This release contains the native library binaries for extractous-go.
           
           ## Installation
           
-          \`\`\`bash
-          # Download and extract for your platform
-          tar xzf extractous-ffi-<platform>.tar.gz
+          Use the installation command from your Go project:
           
-          # Verify checksum
-          sha256sum -c extractous-ffi-<platform>.tar.gz.sha256
-          \`\`\`
+          ```bash
+          go run github.com/rahulpoonia29/extractous-go/cmd/install@latest
+          ```
           
-          ## Contents
+          The installer will automatically download the correct platform libraries for you.
+          
+          ## Available Platforms
+          
+          - **linux_amd64**: Linux x86_64
+          - **windows_amd64**: Windows x86_64
+          - **darwin_arm64**: macOS Apple Silicon (M1/M2)
+          
+          ## Manual Installation
+          
+          If you prefer to install manually:
+          
+          1. Download the archive for your platform
+          2. Extract it to `./native/{platform}/` in your project
+          3. Verify the checksum using the `.sha256` file
+          
+          ## Archive Contents
           
           Each archive contains:
-          - Native shared libraries (\`.so\`, \`.dll\`, or \`.dylib\`)
-          - C header files for FFI integration
-          - All required dependencies (non-system libraries)
+          - `include/extractous.h` - C header file
+          - `lib/` - Platform-specific shared libraries
           
           ## Build Information
           
+          - Rust version: 1.90.0
           - Built with GraalVM Native Image
-          - Rust version: ${{ env.RUST_VERSION }}
-          - Build date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          - Build date: $(date -u +"%Y-%m-%d")
+          
+          ---
+          
+          **Note:** This is a draft release. Please review and edit these notes before publishing.
           EOF
           
           cat release_notes.md
       
-      - name: Create GitHub Release
+      - name: Create GitHub Release (Draft)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag_name }}
           name: Release ${{ steps.tag.outputs.tag_name }}
           body_path: release_notes.md
-          draft: false
+          draft: true
           prerelease: ${{ contains(steps.tag.outputs.tag_name, '-') }}
-          files: |
-            artifacts/*.tar.gz
-            artifacts/*.sha256
+          files: release/*
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -140,19 +166,19 @@ jobs:
         run: |
           TAG_NAME="${{ steps.tag.outputs.tag_name }}"
           
-          echo "## 🎉 Release Published: ${TAG_NAME}" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 Draft Release Created: ${TAG_NAME}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Release created with the following artifacts:" >> $GITHUB_STEP_SUMMARY
+          echo "The release has been created as a **draft**. Please review it before publishing:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "https://github.com/${{ github.repository }}/releases/tag/${TAG_NAME}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Release Assets" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          cd artifacts
-          for platform in linux_amd64 windows_amd64 darwin_arm64; do
-            if [ -f "extractous-ffi-$platform.tar.gz" ]; then
-              size=$(du -h "extractous-ffi-$platform.tar.gz" | cut -f1)
-              checksum=$(cat "extractous-ffi-$platform.tar.gz.sha256" | cut -d' ' -f1 | cut -c1-16)
-              echo "- \`extractous-ffi-$platform.tar.gz\` ($size)" >> $GITHUB_STEP_SUMMARY
+          for file in release/*.{tar.gz,zip}; do
+            if [ -f "$file" ]; then
+              size=$(du -h "$file" | cut -f1)
+              filename=$(basename "$file")
+              echo "- \`$filename\` ($size)" >> $GITHUB_STEP_SUMMARY
             fi
           done
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "View the release: https://github.com/${{ github.repository }}/releases/tag/${TAG_NAME}" >> $GITHUB_STEP_SUMMARY
