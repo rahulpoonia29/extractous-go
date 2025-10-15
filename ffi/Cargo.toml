@@ -2,7 +2,7 @@
 name = "extractous-ffi"
 version = "0.1.2"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.90"
 authors = ["Rahul"]
 description = "C FFI bindings for extractous document extraction library"
 license = "Apache-2.0"
