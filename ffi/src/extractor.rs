@@ -237,7 +237,11 @@ pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
 
                 ERR_OK
             }
-            Err(e) => extractous_error_to_code(&e),
+            Err(e) => {
+                let code = extractous_error_to_code(&e);
+                set_last_error(e);
+                code
+            }
         }
     }
 }
@@ -278,7 +282,11 @@ pub unsafe extern "C" fn extractous_extractor_extract_file(
                 *out_metadata = metadata_to_c(metadata);
                 ERR_OK
             }
-            Err(e) => extractous_error_to_code(&e),
+            Err(e) => {
+                let code = extractous_error_to_code(&e);
+                set_last_error(e);
+                code
+            }
         }
     }
 }
@@ -318,7 +326,11 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
                 *out_metadata = metadata_to_c(metadata);
                 ERR_OK
             }
-            Err(e) => extractous_error_to_code(&e),
+            Err(e) => {
+                let code = extractous_error_to_code(&e);
+                set_last_error(e);
+                code
+            }
         }
     }
 }
@@ -354,7 +366,11 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes(
                 *out_metadata = metadata_to_c(metadata);
                 ERR_OK
             }
-            Err(e) => extractous_error_to_code(&e),
+            Err(e) => {
+                let code = extractous_error_to_code(&e);
+                set_last_error(e);
+                code
+            }
         }
     }
 }
@@ -429,7 +445,11 @@ pub unsafe extern "C" fn extractous_extractor_extract_url_to_string(
 
                 ERR_OK
             }
-            Err(e) => extractous_error_to_code(&e),
+            Err(e) => {
+                let code = extractous_error_to_code(&e);
+                set_last_error(e);
+                code
+            }
         }
     }
 }
@@ -470,7 +490,11 @@ pub unsafe extern "C" fn extractous_extractor_extract_url(
                 *out_metadata = metadata_to_c(metadata);
                 ERR_OK
             }
-            Err(e) => extractous_error_to_code(&e),
+            Err(e) => {
+                let code = extractous_error_to_code(&e);
+                set_last_error(e);
+                code
+            }
         }
     }
 }

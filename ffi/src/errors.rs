@@ -25,9 +25,11 @@
 //! }
 //! ```
 
+use std::cell::RefCell;
 use std::error::Error as StdError;
 use std::ffi::CString;
 use std::os::raw::c_int;
+// use std::ffi::{CStr, CString};
 
 // ============================================================================
 // Error Code Constants
@@ -260,4 +262,116 @@ pub(crate) fn extractous_error_to_code(err: &crate::ecore::Error) -> c_int {
 
     // If no specific error was identified, return general extraction failure
     ERR_EXTRACTION_FAILED
+}
+
+thread_local! {
+    /// Stores the last error that occurred on this thread
+    /// We store the actual Error object, not the formatted string,
+    /// to defer the expensive formatting until it's requested
+    static LAST_ERROR: RefCell<Option<Box<dyn std::error::Error + Send>>> = RefCell::new(None);
+}
+
+/// Store the last error in thread-local storage
+///
+/// This is called internally whenever an FFI function returns an error code.
+/// The error is stored as-is without any formatting, making this very cheap.
+pub(crate) fn set_last_error(err: impl std::error::Error + Send + 'static) {
+    LAST_ERROR.with(|cell| {
+        *cell.borrow_mut() = Some(Box::new(err));
+    });
+}
+
+/// Retrieve detailed debug information for the last error on this thread
+///
+/// This function formats the stored error with full debug representation
+/// including error chain and backtrace (if RUST_BACKTRACE=1).
+///
+/// **Important**: This clears the stored error after retrieval.
+/// Subsequent calls return NULL unless a new error occurs.
+///
+/// # Returns
+/// - Pointer to null-terminated UTF-8 string with debug info
+/// - NULL if no error has occurred on this thread
+///
+/// # Safety
+/// - Returned string must be freed with `extractous_string_free()`
+/// - This function is thread-safe (uses thread-local storage)
+///
+/// # Performance
+/// This function does expensive string formatting. Only call it when
+/// you actually need debug information (e.g., logging, debugging).
+///
+/// # Example
+/// ```
+/// int code = extractous_extractor_extract_file_to_string(...);
+/// if (code != ERR_OK) {
+///     // Get user-facing message (fast)
+///     char* msg = extractous_error_message(code);
+///     printf("Error: %s\n", msg);
+///     extractous_string_free(msg);
+///     
+///     // Optionally get debug info (slower, for developers)
+///     char* debug = extractous_error_get_last_debug();
+///     if (debug) {
+///         fprintf(stderr, "Debug details:\n%s\n", debug);
+///         extractous_string_free(debug);
+///     }
+/// }
+/// ```
+#[unsafe(no_mangle)]
+pub extern "C" fn extractous_error_get_last_debug() -> *mut libc::c_char {
+    LAST_ERROR.with(|cell| {
+        if let Some(err) = cell.borrow_mut().take() {
+            // Format the error with full debug representation
+            // This includes:
+            // - Main error message
+            // - Complete source chain (all nested errors)
+            // - Backtrace if RUST_BACKTRACE=1 or RUST_BACKTRACE=full
+            let mut debug_output = format!("Error: {}\n", err);
+
+            // Walk the error chain
+            let mut source = err.source();
+            let mut level = 0;
+            while let Some(cause) = source {
+                debug_output.push_str(&format!("\nCaused by:\n  {}: {}", level, cause));
+                source = cause.source();
+                level += 1;
+            }
+
+            // Add backtrace if available (requires RUST_BACKTRACE=1)
+            // The Debug formatter will include it
+            debug_output.push_str(&format!("\n\nDebug representation:\n{:?}", err));
+
+            // Convert to C string
+            match CString::new(debug_output) {
+                Ok(s) => s.into_raw(),
+                Err(_) => std::ptr::null_mut(),
+            }
+        } else {
+            std::ptr::null_mut()
+        }
+    })
+}
+
+/// Check if there is a stored error for the current thread
+///
+/// This is useful to check if debug info is available before
+/// calling the more expensive `extractous_error_get_last_debug()`.
+///
+/// # Returns
+/// - 1 if an error is stored
+/// - 0 if no error is stored
+#[unsafe(no_mangle)]
+pub extern "C" fn extractous_error_has_debug() -> libc::c_int {
+    LAST_ERROR.with(|cell| if cell.borrow().is_some() { 1 } else { 0 })
+}
+
+/// Clear any stored error for the current thread without retrieving it
+///
+/// This is useful to reset error state without the overhead of formatting.
+#[unsafe(no_mangle)]
+pub extern "C" fn extractous_error_clear_last() {
+    LAST_ERROR.with(|cell| {
+        *cell.borrow_mut() = None;
+    });
 }
