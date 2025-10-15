@@ -92,7 +92,7 @@ use std::io::Read;
 /// - `buffer` must point to at least `buffer_size` writable bytes
 /// - `bytes_read` must be NULL or point to valid size_t
 /// - Buffer content is undefined if function returns error
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_stream_read(
     handle: *mut CStreamReader,
     buffer: *mut u8,
@@ -151,7 +151,7 @@ pub unsafe extern "C" fn extractous_stream_read(
 ///
 /// ### Safety
 /// - Same safety requirements as `extractous_stream_read()`
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_stream_read_exact(
     handle: *mut CStreamReader,
     buffer: *mut u8,
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn extractous_stream_read_exact(
 /// - `handle` must be a valid StreamReader pointer
 /// - `out_buffer` and `out_size` must be valid pointers
 /// - Returned buffer must be freed with `extractous_buffer_free()`
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_stream_read_all(
     handle: *mut CStreamReader,
     out_buffer: *mut *mut u8,
@@ -291,7 +291,7 @@ pub unsafe extern "C" fn extractous_stream_read_all(
 /// // ... use data ...
 /// extractous_buffer_free(data, size);
 /// ```
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_buffer_free(buffer: *mut u8, size: libc::size_t) {
     if !buffer.is_null() && size > 0 {
         unsafe {
@@ -318,7 +318,7 @@ pub unsafe extern "C" fn extractous_buffer_free(buffer: *mut u8, size: libc::siz
 /// // ... extract to stream and use reader ...
 /// extractous_stream_free(reader);  // Always free when done
 /// ```
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_stream_free(handle: *mut CStreamReader) {
     if !handle.is_null() {
         unsafe {

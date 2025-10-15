@@ -91,7 +91,7 @@ pub(crate) unsafe fn metadata_to_c(metadata: HashMap<String, Vec<String>>) -> *m
 /// // ... use metadata ...
 /// extractous_metadata_free(metadata);
 /// ```
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_metadata_free(metadata: *mut CMetadata) {
     if metadata.is_null() {
         return;

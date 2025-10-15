@@ -19,7 +19,7 @@ use std::ptr;
 /// ### Returns
 /// Pointer to new Extractor, or NULL on failure.
 /// Must be freed with `extractous_extractor_free`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn extractous_extractor_new() -> *mut CExtractor {
     let extractor = Box::new(CoreExtractor::new());
     Box::into_raw(extractor) as *mut CExtractor
@@ -31,7 +31,7 @@ pub extern "C" fn extractous_extractor_new() -> *mut CExtractor {
 /// - `handle` must be a valid pointer returned by `extractous_extractor_new`
 /// - `handle` must not be used after this call
 /// - Calling this twice on the same pointer causes undefined behavior
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_free(handle: *mut CExtractor) {
     if !handle.is_null() {
         unsafe {
@@ -52,7 +52,7 @@ pub unsafe extern "C" fn extractous_extractor_free(handle: *mut CExtractor) {
 ///
 /// ### Returns
 /// New Extractor handle with updated config, or NULL on error.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_set_extract_string_max_length(
     handle: *mut CExtractor,
     max_length: libc::c_int,
@@ -77,7 +77,7 @@ pub unsafe extern "C" fn extractous_extractor_set_extract_string_max_length(
 ///
 /// ### Returns
 /// New Extractor handle, or NULL if encoding is invalid.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_set_encoding(
     handle: *mut CExtractor,
     encoding: libc::c_int,
@@ -106,7 +106,7 @@ pub unsafe extern "C" fn extractous_extractor_set_encoding(
 /// - `handle` must be a valid Extractor pointer
 /// - `config` must be a valid PdfParserConfig pointer
 /// - Returns a NEW handle; old handle is consumed
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_set_pdf_config(
     handle: *mut CExtractor,
     config: *mut CPdfParserConfig,
@@ -127,7 +127,7 @@ pub unsafe extern "C" fn extractous_extractor_set_pdf_config(
 ///
 /// ### Safety
 /// Same safety requirements as `extractous_extractor_set_pdf_config`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_set_office_config(
     handle: *mut CExtractor,
     config: *mut COfficeParserConfig,
@@ -148,7 +148,7 @@ pub unsafe extern "C" fn extractous_extractor_set_office_config(
 ///
 /// ### Safety
 /// Same safety requirements as `extractous_extractor_set_pdf_config`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
     handle: *mut CExtractor,
     config: *mut CTesseractOcrConfig,
@@ -170,7 +170,7 @@ pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
 /// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - Returns a NEW handle; old handle is consumed
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_set_xml_output(
     handle: *mut CExtractor,
     xml_output: bool,
@@ -201,7 +201,7 @@ pub unsafe extern "C" fn extractous_extractor_set_xml_output(
 ///
 /// ### Returns
 /// ERR_OK on success, error code on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
     handle: *mut CExtractor,
     path: *const c_char,
@@ -253,7 +253,7 @@ pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
 ///
 /// ### Returns
 /// ERR_OK on success, error code on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_file(
     handle: *mut CExtractor,
     path: *const c_char,
@@ -292,7 +292,7 @@ pub unsafe extern "C" fn extractous_extractor_extract_file(
 ///
 /// ### Returns
 /// ERR_OK on success, error code on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
     handle: *mut CExtractor,
     data: *const u8,
@@ -332,7 +332,7 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
 ///
 /// ### Returns
 /// ERR_OK on success, error code on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_bytes(
     handle: *mut CExtractor,
     data: *const u8,
@@ -369,7 +369,7 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes(
 /// - `s` must be a pointer returned by an extractous function
 /// - `s` must not be used after this call
 /// - Calling this twice on the same pointer causes undefined behavior
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_string_free(s: *mut c_char) {
     if !s.is_null() {
         unsafe {
@@ -393,7 +393,7 @@ pub unsafe extern "C" fn extractous_string_free(s: *mut c_char) {
 ///
 /// ### Returns
 /// ERR_OK on success, error code on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_url_to_string(
     handle: *mut CExtractor,
     url: *const c_char,
@@ -445,7 +445,7 @@ pub unsafe extern "C" fn extractous_extractor_extract_url_to_string(
 ///
 /// ### Returns
 /// ERR_OK on success, error code on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_url(
     handle: *mut CExtractor,
     url: *const c_char,
