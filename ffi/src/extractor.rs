@@ -16,7 +16,7 @@ use std::ptr;
 
 /// Create a new Extractor with default configuration
 ///
-/// # Returns
+/// ### Returns
 /// Pointer to new Extractor, or NULL on failure.
 /// Must be freed with `extractous_extractor_free`.
 #[no_mangle]
@@ -27,7 +27,7 @@ pub extern "C" fn extractous_extractor_new() -> *mut CExtractor {
 
 /// Free an Extractor instance
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid pointer returned by `extractous_extractor_new`
 /// - `handle` must not be used after this call
 /// - Calling this twice on the same pointer causes undefined behavior
@@ -44,11 +44,11 @@ pub unsafe extern "C" fn extractous_extractor_free(handle: *mut CExtractor) {
 
 /// Set maximum length for extracted string content
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - Returns a NEW handle; old handle is consumed and must not be used
 ///
-/// # Returns
+/// ### Returns
 /// New Extractor handle with updated config, or NULL on error.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_set_extract_string_max_length(
@@ -66,12 +66,12 @@ pub unsafe extern "C" fn extractous_extractor_set_extract_string_max_length(
 
 /// Set character encoding for extraction
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - `encoding` must be a valid CHARSET_* constant
 /// - Returns a NEW handle; old handle is consumed
 ///
-/// # Returns
+/// ### Returns
 /// New Extractor handle, or NULL if encoding is invalid.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_set_encoding(
@@ -96,7 +96,7 @@ pub unsafe extern "C" fn extractous_extractor_set_encoding(
 
 /// Set PDF parser configuration
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - `config` must be a valid PdfParserConfig pointer
 /// - Returns a NEW handle; old handle is consumed
@@ -117,7 +117,7 @@ pub unsafe extern "C" fn extractous_extractor_set_pdf_config(
 
 /// Set Office parser configuration
 ///
-/// # Safety
+/// ### Safety
 /// Same safety requirements as `extractous_extractor_set_pdf_config`.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_set_office_config(
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn extractous_extractor_set_office_config(
 
 /// Set OCR configuration
 ///
-/// # Safety
+/// ### Safety
 /// Same safety requirements as `extractous_extractor_set_pdf_config`.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
 
 /// Set whether to output XML structure
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - Returns a NEW handle; old handle is consumed
 #[no_mangle]
@@ -178,14 +178,14 @@ pub unsafe extern "C" fn extractous_extractor_set_xml_output(
 
 /// Extract file content to string
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - `path` must be a valid null-terminated UTF-8 string
 /// - `out_content` and `out_metadata` must be valid pointers
 /// - Caller must free returned content with `extractous_string_free`
 /// - Caller must free returned metadata with `extractous_metadata_free`
 ///
-/// # Returns
+/// ### Returns
 /// ERR_OK on success, error code on failure.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
@@ -228,14 +228,14 @@ pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
 
 /// Extract file content to stream
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - `path` must be a valid null-terminated UTF-8 string
 /// - `out_reader` and `out_metadata` must be valid pointers
 /// - Caller must free returned reader with `extractous_stream_free`
 /// - Caller must free returned metadata with `extractous_metadata_free`
 ///
-/// # Returns
+/// ### Returns
 /// ERR_OK on success, error code on failure.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_extract_file(
@@ -267,12 +267,12 @@ pub unsafe extern "C" fn extractous_extractor_extract_file(
 
 /// Extract from byte array to string
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - `data` must point to at least `data_len` valid bytes
 /// - `out_content` and `out_metadata` must be valid pointers
 ///
-/// # Returns
+/// ### Returns
 /// ERR_OK on success, error code on failure.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
@@ -305,12 +305,12 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
 
 /// Extract from byte array to stream
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - `data` must point to at least `data_len` valid bytes
 /// - `out_reader` and `out_metadata` must be valid pointers
 ///
-/// # Returns
+/// ### Returns
 /// ERR_OK on success, error code on failure.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_extract_bytes(
@@ -343,7 +343,7 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes(
 
 /// Free a string allocated by Rust
 ///
-/// # Safety
+/// ### Safety
 /// - `s` must be a pointer returned by an extractous function
 /// - `s` must not be used after this call
 /// - Calling this twice on the same pointer causes undefined behavior
@@ -360,14 +360,14 @@ pub unsafe extern "C" fn extractous_string_free(s: *mut c_char) {
 
 /// Extract URL content to string
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - `url` must be a valid null-terminated UTF-8 string
 /// - `out_content` and `out_metadata` must be valid pointers
 /// - Caller must free returned content with `extractous_string_free`
 /// - Caller must free returned metadata with `extractous_metadata_free`
 ///
-/// # Returns
+/// ### Returns
 /// ERR_OK on success, error code on failure.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_extract_url_to_string(
@@ -410,14 +410,14 @@ pub unsafe extern "C" fn extractous_extractor_extract_url_to_string(
 
 /// Extract URL content to stream
 ///
-/// # Safety
+/// ### Safety
 /// - `handle` must be a valid Extractor pointer
 /// - `url` must be a valid null-terminated UTF-8 string
 /// - `out_reader` and `out_metadata` must be valid pointers
 /// - Caller must free returned reader with `extractous_stream_free`
 /// - Caller must free returned metadata with `extractous_metadata_free`
 ///
-/// # Returns
+/// ### Returns
 /// ERR_OK on success, error code on failure.
 #[no_mangle]
 pub unsafe extern "C" fn extractous_extractor_extract_url(
