@@ -58,7 +58,7 @@ use std::ptr;
 ///     // Handle allocation error
 /// }
 /// ```
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn extractous_pdf_config_new() -> *mut CPdfParserConfig {
     let config = Box::new(CorePdfConfig::new());
     Box::into_raw(config) as *mut CPdfParserConfig
@@ -85,7 +85,7 @@ pub extern "C" fn extractous_pdf_config_new() -> *mut CPdfParserConfig {
 /// ##### Safety
 /// - Input handle is consumed; do not use after this call
 /// - Returns NULL if handle is NULL or strategy is invalid
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_pdf_config_set_ocr_strategy(
     handle: *mut CPdfParserConfig,
     strategy: libc::c_int,
@@ -102,9 +102,11 @@ pub unsafe extern "C" fn extractous_pdf_config_set_ocr_strategy(
         _ => return ptr::null_mut(), // Invalid strategy
     };
 
-    let old_config = Box::from_raw(handle as *mut CorePdfConfig);
-    let new_config = old_config.set_ocr_strategy(ocr_strategy);
-    Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CorePdfConfig);
+        let new_config = old_config.set_ocr_strategy(ocr_strategy);
+        Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    }
 }
 
 /// Enable or disable extraction of inline images from PDF
@@ -125,7 +127,7 @@ pub unsafe extern "C" fn extractous_pdf_config_set_ocr_strategy(
 ///
 /// ##### Safety
 /// Input handle is consumed; do not use after this call.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_pdf_config_set_extract_inline_images(
     handle: *mut CPdfParserConfig,
     value: bool,
@@ -133,9 +135,11 @@ pub unsafe extern "C" fn extractous_pdf_config_set_extract_inline_images(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CorePdfConfig);
-    let new_config = old_config.set_extract_inline_images(value);
-    Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CorePdfConfig);
+        let new_config = old_config.set_extract_inline_images(value);
+        Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    }
 }
 
 /// Extract each unique inline image only once
@@ -151,7 +155,7 @@ pub unsafe extern "C" fn extractous_pdf_config_set_extract_inline_images(
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_pdf_config_set_extract_unique_inline_images_only(
     handle: *mut CPdfParserConfig,
     value: bool,
@@ -159,9 +163,11 @@ pub unsafe extern "C" fn extractous_pdf_config_set_extract_unique_inline_images_
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CorePdfConfig);
-    let new_config = old_config.set_extract_unique_inline_images_only(value);
-    Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CorePdfConfig);
+        let new_config = old_config.set_extract_unique_inline_images_only(value);
+        Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    }
 }
 
 /// Extract text with marked content structure
@@ -177,7 +183,7 @@ pub unsafe extern "C" fn extractous_pdf_config_set_extract_unique_inline_images_
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_pdf_config_set_extract_marked_content(
     handle: *mut CPdfParserConfig,
     value: bool,
@@ -185,9 +191,11 @@ pub unsafe extern "C" fn extractous_pdf_config_set_extract_marked_content(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CorePdfConfig);
-    let new_config = old_config.set_extract_marked_content(value);
-    Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CorePdfConfig);
+        let new_config = old_config.set_extract_marked_content(value);
+        Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    }
 }
 
 /// Extract text from PDF annotations
@@ -203,7 +211,7 @@ pub unsafe extern "C" fn extractous_pdf_config_set_extract_marked_content(
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_pdf_config_set_extract_annotation_text(
     handle: *mut CPdfParserConfig,
     value: bool,
@@ -211,9 +219,11 @@ pub unsafe extern "C" fn extractous_pdf_config_set_extract_annotation_text(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CorePdfConfig);
-    let new_config = old_config.set_extract_annotation_text(value);
-    Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CorePdfConfig);
+        let new_config = old_config.set_extract_annotation_text(value);
+        Box::into_raw(Box::new(new_config)) as *mut CPdfParserConfig
+    }
 }
 
 /// Free PDF parser configuration
@@ -229,10 +239,12 @@ pub unsafe extern "C" fn extractous_pdf_config_set_extract_annotation_text(
 /// // Use config...
 /// extractous_pdf_config_free(config);  // Only if not attached to extractor
 /// ```
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_pdf_config_free(handle: *mut CPdfParserConfig) {
     if !handle.is_null() {
-        drop(Box::from_raw(handle as *mut CorePdfConfig));
+        unsafe {
+            drop(Box::from_raw(handle as *mut CorePdfConfig));
+        }
     }
 }
 
@@ -251,7 +263,7 @@ pub unsafe extern "C" fn extractous_pdf_config_free(handle: *mut CPdfParserConfi
 /// ### Returns
 /// Pointer to new OfficeParserConfig. Must be freed with `extractous_office_config_free()`
 /// unless attached to an extractor.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn extractous_office_config_new() -> *mut COfficeParserConfig {
     let config = Box::new(CoreOfficeConfig::new());
     Box::into_raw(config) as *mut COfficeParserConfig
@@ -271,7 +283,7 @@ pub extern "C" fn extractous_office_config_new() -> *mut COfficeParserConfig {
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_office_config_set_extract_macros(
     handle: *mut COfficeParserConfig,
     value: bool,
@@ -279,9 +291,11 @@ pub unsafe extern "C" fn extractous_office_config_set_extract_macros(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CoreOfficeConfig);
-    let new_config = old_config.set_extract_macros(value);
-    Box::into_raw(Box::new(new_config)) as *mut COfficeParserConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CoreOfficeConfig);
+        let new_config = old_config.set_extract_macros(value);
+        Box::into_raw(Box::new(new_config)) as *mut COfficeParserConfig
+    }
 }
 
 /// Include deleted content from DOCX track changes
@@ -298,7 +312,7 @@ pub unsafe extern "C" fn extractous_office_config_set_extract_macros(
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_office_config_set_include_deleted_content(
     handle: *mut COfficeParserConfig,
     value: bool,
@@ -306,9 +320,11 @@ pub unsafe extern "C" fn extractous_office_config_set_include_deleted_content(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CoreOfficeConfig);
-    let new_config = old_config.set_include_deleted_content(value);
-    Box::into_raw(Box::new(new_config)) as *mut COfficeParserConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CoreOfficeConfig);
+        let new_config = old_config.set_include_deleted_content(value);
+        Box::into_raw(Box::new(new_config)) as *mut COfficeParserConfig
+    }
 }
 
 /// Include "move-from" content in DOCX documents
@@ -324,7 +340,7 @@ pub unsafe extern "C" fn extractous_office_config_set_include_deleted_content(
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_office_config_set_include_move_from_content(
     handle: *mut COfficeParserConfig,
     value: bool,
@@ -332,9 +348,11 @@ pub unsafe extern "C" fn extractous_office_config_set_include_move_from_content(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CoreOfficeConfig);
-    let new_config = old_config.set_include_move_from_content(value);
-    Box::into_raw(Box::new(new_config)) as *mut COfficeParserConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CoreOfficeConfig);
+        let new_config = old_config.set_include_move_from_content(value);
+        Box::into_raw(Box::new(new_config)) as *mut COfficeParserConfig
+    }
 }
 
 /// Include text from drawing shapes and text boxes
@@ -350,7 +368,7 @@ pub unsafe extern "C" fn extractous_office_config_set_include_move_from_content(
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_office_config_set_include_shape_based_content(
     handle: *mut COfficeParserConfig,
     value: bool,
@@ -358,9 +376,11 @@ pub unsafe extern "C" fn extractous_office_config_set_include_shape_based_conten
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CoreOfficeConfig);
-    let new_config = old_config.set_include_shape_based_content(value);
-    Box::into_raw(Box::new(new_config)) as *mut COfficeParserConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CoreOfficeConfig);
+        let new_config = old_config.set_include_shape_based_content(value);
+        Box::into_raw(Box::new(new_config)) as *mut COfficeParserConfig
+    }
 }
 
 /// Free Office parser configuration
@@ -368,10 +388,12 @@ pub unsafe extern "C" fn extractous_office_config_set_include_shape_based_conten
 /// ### Safety
 /// - `handle` must be valid and not used after this call
 /// - Do not call this if config was attached to an extractor
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_office_config_free(handle: *mut COfficeParserConfig) {
     if !handle.is_null() {
-        drop(Box::from_raw(handle as *mut CoreOfficeConfig));
+        unsafe {
+            drop(Box::from_raw(handle as *mut CoreOfficeConfig));
+        }
     }
 }
 
@@ -394,7 +416,7 @@ pub unsafe extern "C" fn extractous_office_config_free(handle: *mut COfficeParse
 /// ### Returns
 /// Pointer to new TesseractOcrConfig. Must be freed with `extractous_ocr_config_free()`
 /// unless attached to an extractor.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn extractous_ocr_config_new() -> *mut CTesseractOcrConfig {
     let config = Box::new(CoreOcrConfig::new());
     Box::into_raw(config) as *mut CTesseractOcrConfig
@@ -424,7 +446,7 @@ pub extern "C" fn extractous_ocr_config_new() -> *mut CTesseractOcrConfig {
 ///
 /// ### Safety
 /// Input handle is consumed. Language string must be valid UTF-8.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_ocr_config_set_language(
     handle: *mut CTesseractOcrConfig,
     language: *const libc::c_char,
@@ -433,14 +455,16 @@ pub unsafe extern "C" fn extractous_ocr_config_set_language(
         return ptr::null_mut();
     }
 
-    let lang_str = match CStr::from_ptr(language).to_str() {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
-    };
+    unsafe {
+        let lang_str = match CStr::from_ptr(language).to_str() {
+            Ok(s) => s,
+            Err(_) => return ptr::null_mut(),
+        };
 
-    let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
-    let new_config = old_config.set_language(lang_str);
-    Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+        let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
+        let new_config = old_config.set_language(lang_str);
+        Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+    }
 }
 
 /// Set the DPI (dots per inch) for OCR processing
@@ -461,7 +485,7 @@ pub unsafe extern "C" fn extractous_ocr_config_set_language(
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_ocr_config_set_density(
     handle: *mut CTesseractOcrConfig,
     density: i32,
@@ -469,9 +493,11 @@ pub unsafe extern "C" fn extractous_ocr_config_set_density(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
-    let new_config = old_config.set_density(density);
-    Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
+        let new_config = old_config.set_density(density);
+        Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+    }
 }
 
 /// Set the color depth for OCR processing
@@ -485,7 +511,7 @@ pub unsafe extern "C" fn extractous_ocr_config_set_density(
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_ocr_config_set_depth(
     handle: *mut CTesseractOcrConfig,
     depth: i32,
@@ -493,9 +519,11 @@ pub unsafe extern "C" fn extractous_ocr_config_set_depth(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
-    let new_config = old_config.set_depth(depth);
-    Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
+        let new_config = old_config.set_depth(depth);
+        Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+    }
 }
 
 /// Enable or disable image preprocessing for OCR
@@ -512,7 +540,7 @@ pub unsafe extern "C" fn extractous_ocr_config_set_depth(
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_ocr_config_set_enable_image_preprocessing(
     handle: *mut CTesseractOcrConfig,
     value: bool,
@@ -520,9 +548,11 @@ pub unsafe extern "C" fn extractous_ocr_config_set_enable_image_preprocessing(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
-    let new_config = old_config.set_enable_image_preprocessing(value);
-    Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
+        let new_config = old_config.set_enable_image_preprocessing(value);
+        Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+    }
 }
 
 /// Set timeout for OCR processing
@@ -543,7 +573,7 @@ pub unsafe extern "C" fn extractous_ocr_config_set_enable_image_preprocessing(
 ///
 /// ### Safety
 /// Input handle is consumed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_ocr_config_set_timeout_seconds(
     handle: *mut CTesseractOcrConfig,
     seconds: i32,
@@ -551,9 +581,11 @@ pub unsafe extern "C" fn extractous_ocr_config_set_timeout_seconds(
     if handle.is_null() {
         return ptr::null_mut();
     }
-    let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
-    let new_config = old_config.set_timeout_seconds(seconds);
-    Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+    unsafe {
+        let old_config = Box::from_raw(handle as *mut CoreOcrConfig);
+        let new_config = old_config.set_timeout_seconds(seconds);
+        Box::into_raw(Box::new(new_config)) as *mut CTesseractOcrConfig
+    }
 }
 
 /// Free Tesseract OCR configuration
@@ -561,9 +593,11 @@ pub unsafe extern "C" fn extractous_ocr_config_set_timeout_seconds(
 /// ### Safety
 /// - `handle` must be valid and not used after this call
 /// - Do not call this if config was attached to an extractor
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_ocr_config_free(handle: *mut CTesseractOcrConfig) {
     if !handle.is_null() {
-        drop(Box::from_raw(handle as *mut CoreOcrConfig));
+        unsafe {
+            drop(Box::from_raw(handle as *mut CoreOcrConfig));
+        }
     }
 }

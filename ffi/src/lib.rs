@@ -155,13 +155,13 @@ pub use stream::*;
 pub use types::*;
 
 /// Returns the FFI wrapper version in semver format.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn extractous_ffi_version() -> *const libc::c_char {
     concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const libc::c_char
 }
 
 /// Returns the underlying Extractous core library version.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn extractous_core_version() -> *const libc::c_char {
     concat!("0.3.0", "\0").as_ptr() as *const libc::c_char
 }
