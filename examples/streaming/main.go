@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 
 	"github.com/rahulpoonia29/extractous-go"
@@ -15,15 +16,25 @@ func main() {
 	}
 	defer extractor.Close()
 
-	// Extract text from a PDF file
-	content, metadata, err := extractor.ExtractFileToString("sample.pdf")
+	// Extract to a stream for large files
+	reader, metadata, err := extractor.ExtractFile("large_document.pdf")
 	if err != nil {
 		log.Fatalf("Extraction failed: %v", err)
 	}
+	defer reader.Close()
 
-	// Print the extracted content
-	fmt.Println("Extracted Content:")
-	fmt.Println(content)
+	// Read and print in chunks
+	buffer := make([]byte, 4096)
+	for {
+		n, err := reader.Read(buffer)
+		if err != nil && err != io.EOF {
+			log.Fatalf("Read failed: %v", err)
+		}
+		if n == 0 {
+			break
+		}
+		fmt.Print(string(buffer[:n]))
+	}
 
 	// Print metadata
 	fmt.Println("\nMetadata:")
