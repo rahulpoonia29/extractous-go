@@ -79,6 +79,11 @@ fn set_rpath() {
         // This allows the library to be relocatable
         println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
         println!("cargo:rustc-link-arg=-Wl,-z,origin");
+        // Explicitly link common system libraries
+        println!("cargo:rustc-link-lib=dylib=dl");
+        println!("cargo:rustc-link-lib=dylib=pthread");
+        println!("cargo:rustc-link-lib=dylib=rt");
+        println!("cargo:warning=Explicitly linking dl, pthread, and rt.");
         // Disable new dtags to use RPATH instead of RUNPATH
         // This makes the path non-overridable by LD_LIBRARY_PATH
         println!("cargo:rustc-link-arg=-Wl,--disable-new-dtags");

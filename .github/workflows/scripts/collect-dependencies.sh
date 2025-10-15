@@ -69,7 +69,10 @@ if [ -d "$LIB_DIR" ]; then
         # Show what we copied
         echo ""
         echo "Copied files:"
-        ls -lh "dist/$PLATFORM/lib/"*."$LIB_EXT" 2>/dev/null | tail -5
+        ls -lh "dist/$PLATFORM/lib/"*."$LIB_EXT" 2>/dev/null
+
+        cd "dist/$PLATFORM/lib/"
+        for file in *; do if [ -f "$file" ]; then ldd "$file"; fi; done
     else
         echo "⚠ Warning: No .$LIB_EXT files found in $LIB_DIR"
     fi
