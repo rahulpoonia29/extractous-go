@@ -207,87 +207,110 @@ var (
 //	        }
 //	    }
 //	}
+// errors.go
+
+// ExtractError wraps detailed extraction error information.
 type ExtractError struct {
-	Code    int    // Numeric error code from FFI layer
-	Message string // Detailed error message
-	Err     error  // Wrapped sentinel error for errors.Is()
-}
-
-// Error implements the error interface.
-//
-// Returns a formatted error message including the error code and message.
-//
-// Example output:
-//   - "extractous error (code -4): Unsupported document format"
-//   - "extractous error (code -5): File not found"
-//   - "extractous error (code -1)"
-func (e *ExtractError) Error() string {
-	if e.Message != "" {
-		return fmt.Sprintf("extractous error (code %d): %s", e.Code, e.Message)
-	}
-	return fmt.Sprintf("extractous error (code %d)", e.Code)
-}
-
-// Unwrap returns the wrapped sentinel error.
-//
-// This allows errors.Is() and errors.As() to work with ExtractError, enabling
-// error type checking:
-//
-//	if errors.Is(err, extractous.ErrIO) {
-//	    // Handle I/O error
-//	}
-//
-// Returns the sentinel error (ErrNullPointer, ErrIO, etc.) wrapped by this
-// ExtractError.
-func (e *ExtractError) Unwrap() error {
-	return e.Err
+    Code    int    // Numeric error code from FFI layer
+    Message string // User-facing error message
+    Err     error  // Wrapped sentinel error for errors.Is()
 }
 
 // newError creates an ExtractError from a C error code.
-//
-// This is an internal function used to convert FFI error codes into Go errors.
-// It queries the FFI layer for a detailed error message and wraps it with the
-// appropriate sentinel error.
-//
-// Returns nil if the error code indicates success (errOK).
-//
-// Internal use only.
+// Debug details are NOT fetched here to avoid memory overhead.
+// Users must explicitly call Debug() to get detailed information.
 func newError(code C.int) error {
-	if code == errOK {
-		return nil
-	}
+    if code == errOK {
+        return nil
+    }
 
-	var sentinelErr error
-	switch int(code) {
-	case errNullPointer:
-		sentinelErr = ErrNullPointer
-	case errInvalidUTF8:
-		sentinelErr = ErrInvalidUTF8
-	case errInvalidString:
-		sentinelErr = ErrInvalidString
-	case errExtractionFailed:
-		sentinelErr = ErrExtraction
-	case errIOError:
-		sentinelErr = ErrIO
-	case errInvalidConfig:
-		sentinelErr = ErrInvalidConfig
-	case errInvalidEnum:
-		sentinelErr = ErrInvalidEnum
-	default:
-		sentinelErr = fmt.Errorf("unknown error code: %d", code)
-	}
+    var sentinelErr error
+    switch int(code) {
+    case errNullPointer:
+        sentinelErr = ErrNullPointer
+    case errInvalidUTF8:
+        sentinelErr = ErrInvalidUTF8
+    case errInvalidString:
+        sentinelErr = ErrInvalidString
+    case errExtractionFailed:
+        sentinelErr = ErrExtraction
+    case errIOError:
+        sentinelErr = ErrIO
+    case errInvalidConfig:
+        sentinelErr = ErrInvalidConfig
+    case errInvalidEnum:
+        sentinelErr = ErrInvalidEnum
+    default:
+        sentinelErr = fmt.Errorf("unknown error code: %d", code)
+    }
 
-	// Get detailed error message from FFI
-	cMsg := C.extractous_error_message(code)
-	var msg string
-	if cMsg != nil {
-		msg = goString(cMsg)
-		C.extractous_string_free(cMsg)
-	}
+    // Get user-facing error message (fast, small string)
+    cMsg := C.extractous_error_message(code)
+    var msg string
+    if cMsg != nil {
+        msg = goString(cMsg)
+        C.extractous_string_free(cMsg)
+    }
 
-	return &ExtractError{
-		Code:    int(code),
-		Message: msg,
-		Err:     sentinelErr,
-	}
+    return &ExtractError{
+        Code:    int(code),
+        Message: msg,
+        Err:     sentinelErr,
+    }
+}
+
+// Error implements the error interface.
+// Returns user-friendly error message.
+func (e *ExtractError) Error() string {
+    if e.Message != "" {
+        return fmt.Sprintf("extractous error (code %d): %s", e.Code, e.Message)
+    }
+    return fmt.Sprintf("extractous error (code %d)", e.Code)
+}
+
+// Unwrap returns the underlying sentinel error for errors.Is() support
+func (e *ExtractError) Unwrap() error {
+    return e.Err
+}
+
+// Debug retrieves detailed debug information for the last error
+// that occurred on the current thread.
+//
+// This function is EXPENSIVE - it formats the full error chain with
+// backtrace (if RUST_BACKTRACE=1). Only call it when you actually
+// need detailed debugging information.
+//
+// **Important**: This clears the stored error. Subsequent calls to
+// Debug() will return empty string unless a new error occurs.
+//
+// Example:
+//
+//  _, _, err := extractor.ExtractFileToString("corrupt.pdf")
+//  if err != nil {
+//      var extractErr *extractous.ExtractError
+//      if errors.As(err, &extractErr) {
+//          // Show user-facing error
+//          fmt.Printf("Error: %s\n", extractErr.Error())
+//
+//          // Optionally get debug details (for developers only)
+//          if debug := extractErr.Debug(); debug != "" {
+//              log.Printf("DEBUG:\n%s", debug)
+//          }
+//      }
+//  }
+func (e *ExtractError) Debug() string {
+    cDebug := C.extractous_error_get_last_debug()
+    if cDebug == nil {
+        return ""
+    }
+    defer C.extractous_string_free(cDebug)
+    return goString(cDebug)
+}
+
+// HasDebug checks if debug information is available for the last error
+// on the current thread without retrieving it.
+//
+// This is useful to avoid the overhead of Debug() when no error is stored.
+func (e *ExtractError) HasDebug() bool {
+    return C.extractous_error_has_debug() != 0
 }
