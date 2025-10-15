@@ -3,7 +3,7 @@
 
 //go:generate go run check_native_libs.go
 
-package src
+package extractous
 
 /*
 
