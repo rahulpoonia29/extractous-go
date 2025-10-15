@@ -1,2 +1,36 @@
-/native
-/ffi/include/
+# Binaries for programs and headers
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.h
+
+# Test binary, built with `go test -c`
+*.test
+
+# Dependency directories
+native/
+
+# Go workspace file
+go.work
+
+# FFI build artifacts
+target/
+*.a
+*.o
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
