@@ -105,22 +105,26 @@ pub unsafe extern "C" fn extractous_stream_read(
 
     if buffer_size == 0 {
         if !bytes_read.is_null() {
-            *bytes_read = 0;
+            unsafe {
+                *bytes_read = 0;
+            }
         }
         return ERR_OK;
     }
 
-    let reader = &mut *(handle as *mut CoreStreamReader);
-    let buf_slice = std::slice::from_raw_parts_mut(buffer, buffer_size);
+    unsafe {
+        let reader = &mut *(handle as *mut CoreStreamReader);
+        let buf_slice = std::slice::from_raw_parts_mut(buffer, buffer_size);
 
-    match reader.read(buf_slice) {
-        Ok(n) => {
-            if !bytes_read.is_null() {
-                *bytes_read = n;
+        match reader.read(buf_slice) {
+            Ok(n) => {
+                if !bytes_read.is_null() {
+                    *bytes_read = n;
+                }
+                ERR_OK
             }
-            ERR_OK
+            Err(_) => ERR_IO_ERROR,
         }
-        Err(_) => ERR_IO_ERROR,
     }
 }
 
@@ -160,37 +164,41 @@ pub unsafe extern "C" fn extractous_stream_read_exact(
 
     if buffer_size == 0 {
         if !bytes_read.is_null() {
-            *bytes_read = 0;
+            unsafe {
+                *bytes_read = 0;
+            }
         }
         return ERR_OK;
     }
 
-    let reader = &mut *(handle as *mut CoreStreamReader);
-    let buf_slice = std::slice::from_raw_parts_mut(buffer, buffer_size);
+    unsafe {
+        let reader = &mut *(handle as *mut CoreStreamReader);
+        let buf_slice = std::slice::from_raw_parts_mut(buffer, buffer_size);
 
-    let mut total_read = 0;
-    while total_read < buffer_size {
-        match reader.read(&mut buf_slice[total_read..]) {
-            Ok(0) => {
-                // End of stream
-                if !bytes_read.is_null() {
-                    *bytes_read = total_read;
+        let mut total_read = 0;
+        while total_read < buffer_size {
+            match reader.read(&mut buf_slice[total_read..]) {
+                Ok(0) => {
+                    // End of stream
+                    if !bytes_read.is_null() {
+                        *bytes_read = total_read;
+                    }
+                    return ERR_OK;
                 }
-                return ERR_OK;
-            }
-            Ok(n) => {
-                total_read += n;
-            }
-            Err(_) => {
-                return ERR_IO_ERROR;
+                Ok(n) => {
+                    total_read += n;
+                }
+                Err(_) => {
+                    return ERR_IO_ERROR;
+                }
             }
         }
-    }
 
-    if !bytes_read.is_null() {
-        *bytes_read = total_read;
+        if !bytes_read.is_null() {
+            *bytes_read = total_read;
+        }
+        ERR_OK
     }
-    ERR_OK
 }
 
 /// Read entire remaining stream into a newly allocated buffer
@@ -244,20 +252,22 @@ pub unsafe extern "C" fn extractous_stream_read_all(
         return ERR_NULL_POINTER;
     }
 
-    let reader = &mut *(handle as *mut CoreStreamReader);
-    let mut data = Vec::new();
+    unsafe {
+        let reader = &mut *(handle as *mut CoreStreamReader);
+        let mut data = Vec::new();
 
-    match reader.read_to_end(&mut data) {
-        Ok(_) => {
-            let size = data.len();
-            let ptr = data.as_mut_ptr();
-            std::mem::forget(data); // Prevent Rust from freeing the Vec
+        match reader.read_to_end(&mut data) {
+            Ok(_) => {
+                let size = data.len();
+                let ptr = data.as_mut_ptr();
+                std::mem::forget(data); // Prevent Rust from freeing the Vec
 
-            *out_buffer = ptr;
-            *out_size = size;
-            ERR_OK
+                *out_buffer = ptr;
+                *out_size = size;
+                ERR_OK
+            }
+            Err(_) => ERR_IO_ERROR,
         }
-        Err(_) => ERR_IO_ERROR,
     }
 }
 
@@ -284,8 +294,10 @@ pub unsafe extern "C" fn extractous_stream_read_all(
 #[no_mangle]
 pub unsafe extern "C" fn extractous_buffer_free(buffer: *mut u8, size: libc::size_t) {
     if !buffer.is_null() && size > 0 {
-        // Reconstruct the Vec to properly deallocate
-        let _ = Vec::from_raw_parts(buffer, size, size);
+        unsafe {
+            // Reconstruct the Vec to properly deallocate
+            let _ = Vec::from_raw_parts(buffer, size, size);
+        }
     }
 }
 
@@ -309,6 +321,8 @@ pub unsafe extern "C" fn extractous_buffer_free(buffer: *mut u8, size: libc::siz
 #[no_mangle]
 pub unsafe extern "C" fn extractous_stream_free(handle: *mut CStreamReader) {
     if !handle.is_null() {
-        let _ = Box::from_raw(handle as *mut CoreStreamReader);
+        unsafe {
+            let _ = Box::from_raw(handle as *mut CoreStreamReader);
+        }
     }
 }

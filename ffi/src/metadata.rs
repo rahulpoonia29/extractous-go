@@ -20,7 +20,7 @@
 
 use crate::types::CMetadata;
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 
 /// Convert a Rust HashMap to a C-compatible metadata structure.
 ///
@@ -97,23 +97,25 @@ pub unsafe extern "C" fn extractous_metadata_free(metadata: *mut CMetadata) {
         return;
     }
 
-    let m = Box::from_raw(metadata);
+    unsafe {
+        let m = Box::from_raw(metadata);
 
-    // Free all key and value strings
-    for i in 0..m.len {
-        if !m.keys.is_null() {
-            let _ = CString::from_raw(*m.keys.add(i));
+        // Free all key and value strings
+        for i in 0..m.len {
+            if !m.keys.is_null() {
+                let _ = CString::from_raw(*m.keys.add(i));
+            }
+            if !m.values.is_null() {
+                let _ = CString::from_raw(*m.values.add(i));
+            }
         }
-        if !m.values.is_null() {
-            let _ = CString::from_raw(*m.values.add(i));
-        }
-    }
 
-    // Free the arrays themselves if allocated
-    if !m.keys.is_null() && m.len > 0 {
-        let _ = Vec::from_raw_parts(m.keys, m.len, m.len);
-    }
-    if !m.values.is_null() && m.len > 0 {
-        let _ = Vec::from_raw_parts(m.values, m.len, m.len);
+        // Free the arrays themselves if allocated
+        if !m.keys.is_null() && m.len > 0 {
+            let _ = Vec::from_raw_parts(m.keys, m.len, m.len);
+        }
+        if !m.values.is_null() && m.len > 0 {
+            let _ = Vec::from_raw_parts(m.values, m.len, m.len);
+        }
     }
 }
