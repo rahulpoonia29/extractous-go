@@ -154,7 +154,7 @@ pub const ERR_OCR_FAILED: c_int = -10;
 /// ### Safety
 /// - Return value must be freed with `extractous_string_free()`
 /// - Do not modify the returned string
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn extractous_error_message(code: c_int) -> *mut libc::c_char {
     let msg = match code {
         ERR_OK => "Operation completed successfully",
@@ -189,7 +189,7 @@ pub extern "C" fn extractous_error_message(code: c_int) -> *mut libc::c_char {
 ///
 /// ### Safety
 /// Return value points to static memory and must not be freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn extractous_error_category(code: c_int) -> *const libc::c_char {
     let category = match code {
         ERR_OK => "success\0",
