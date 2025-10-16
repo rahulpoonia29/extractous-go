@@ -64,6 +64,8 @@ if [ -d "$LIB_DIR" ]; then
     if [ "$LIB_COUNT" -gt 0 ]; then
         # Copy all libraries
         cp "$LIB_DIR"/*."$LIB_EXT" "dist/$PLATFORM/lib/" 2>/dev/null || true
+        echo "\n\ngo away\n\n" 
+        ldd "$LIB_DIR"/libtika_native.so
         echo "✓ Copied $LIB_COUNT libraries from $LIB_DIR"
         
         # Show what we copied

@@ -116,7 +116,8 @@ jobs:
         shell: bash
         run: |
           start=$(date +%s)
-          cargo build --release --target ${{ matrix.target }} --quiet
+          export GRADLE_OPTS="-PnativeImageArgs=-H:NativeLinkerOption=-ldl -H:NativeLinkerOption=-lpthread -H:NativeLinkerOption=-lrt"
+          cargo build --release --target ${{ matrix.target }}
           end=$(date +%s)
           echo "Build completed in $((end - start))s"
         env:
