@@ -96,18 +96,29 @@ jobs:
       #   run: sudo apt-get install -y build-essential pkg-config libssl-dev zip openssl-devel
 
       # Setup GraalVM
-      - name: Setup GraalVM and Tools inside container (Linux)
+      - name: Setup GraalVM inside container (Linux)
         if: runner.os == 'Linux'
         run: |
-          # This script is inspired by the upstream extractous project
-          # It installs dependencies and GraalVM inside the manylinux container
-          yum install -y zip openssl-devel
-          curl -s "https://get.sdkman.io" | bash
+          # Install dependencies required by sdkman
+          yum install -y zip unzip
+
+          # Install sdkman in non-interactive mode using the '-y' flag
+          curl -s "https://get.sdkman.io" | sh -s -- -y
+
+          # Source the init script to make sdk command available
           source "/root/.sdkman/bin/sdkman-init.sh"
+
+          # Install and use the correct GraalVM version
           sdk install java 23.0.1-graalce
           sdk use java 23.0.1-graalce
+
+          # Set environment variables for subsequent steps
           echo "GRAALVM_HOME=$GRAALVM_HOME" >> $GITHUB_ENV
           echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+
+          # Verify installation
+          java --version
+          native-image --version
 
       - name: Verify GraalVM setup (Windows)
         if: runner.os == 'Windows'
