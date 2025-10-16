@@ -6,18 +6,17 @@
 package extractous
 
 /*
-
 // Linux
 #cgo linux,amd64 CFLAGS: -I${SRCDIR}/native/linux_amd64/include
-#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/native/linux_amd64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/native/linux_amd64/lib
+#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/native/linux_amd64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,'$ORIGIN/../native/linux_amd64/lib'
 #cgo linux,arm64 CFLAGS: -I${SRCDIR}/native/linux_arm64/include
-#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/native/linux_arm64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/native/linux_arm64/lib
+#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/native/linux_arm64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,'$ORIGIN/../native/linux_arm64/lib'
 
 // macOS
 #cgo darwin,amd64 CFLAGS: -I${SRCDIR}/native/darwin_amd64/include
-#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/native/darwin_amd64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/native/darwin_amd64/lib
+#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/native/darwin_amd64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,'@executable_path/../native/darwin_amd64/lib'
 #cgo darwin,arm64 CFLAGS: -I${SRCDIR}/native/darwin_arm64/include
-#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/native/darwin_arm64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,${SRCDIR}/native/darwin_arm64/lib
+#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/native/darwin_arm64/lib -lextractous_ffi -ldl -lm -lpthread -Wl,-rpath,'@executable_path/../native/darwin_arm64/lib'
 
 // Windows
 #cgo windows,amd64 CFLAGS: -I${SRCDIR}/native/windows_amd64/include
