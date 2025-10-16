@@ -45,6 +45,7 @@ jobs:
   build:
     name: Build ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.os == 'ubuntu-latest' && 'quay.io/pypa/manylinux_2_28_x86_64' || '' }}
 
     strategy:
       fail-fast: false
@@ -92,17 +93,21 @@ jobs:
       # Install build dependencies (Linux)
       - name: Install system dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y build-essential pkg-config libssl-dev
+        run: sudo apt-get install -y build-essential pkg-config libssl-dev zip openssl-devel
 
       # Setup GraalVM
-      - name: Setup GraalVM
-        uses: graalvm/setup-graalvm@v1
-        with:
-          java-version: '23'
-          distribution: 'graalvm-community'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          native-image-job-reports: false
-          set-java-home: true
+      - name: Setup GraalVM and Tools inside container (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # This script is inspired by the upstream extractous project
+          # It installs dependencies and GraalVM inside the manylinux container
+          # yum install -y zip openssl-devel
+          curl -s "https://get.sdkman.io" | bash
+          source "/root/.sdkman/bin/sdkman-init.sh"
+          sdk install java 23.0.1-graalce
+          sdk use java 23.0.1-graalce
+          echo "GRAALVM_HOME=$GRAALVM_HOME" >> $GITHUB_ENV
+          echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
 
       - name: Verify GraalVM setup (Windows)
         if: runner.os == 'Windows'
