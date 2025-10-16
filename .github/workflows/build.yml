@@ -102,11 +102,12 @@ jobs:
           # Install dependencies required by sdkman
           yum install -y zip unzip
 
-          # Install sdkman in non-interactive mode using the '-y' flag
+          # Install sdkman in non-interactive mode
           curl -s "https://get.sdkman.io" | sh -s -- -y
 
-          # Source the init script to make sdk command available
-          source "/root/.sdkman/bin/sdkman-init.sh"
+          # Source the init script using the correct $HOME variable
+          # The CI environment's home directory is /github/home, not /root
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
 
           # Install and use the correct GraalVM version
           sdk install java 23.0.1-graalce
