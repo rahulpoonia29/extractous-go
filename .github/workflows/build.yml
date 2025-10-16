@@ -22,12 +22,6 @@ on:
       - '.github/workflows/scripts/**'
 
   workflow_dispatch:
-    inputs:
-      platform:
-        description: "Optional: Choose a specific platform to build (linux_amd64, windows_amd64, darwin_arm64, all)"
-        required: false
-        default: "all"
-
   workflow_call:
     outputs:
       run_id:
@@ -51,10 +45,6 @@ jobs:
   build:
     name: Build ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
-    if: |
-      github.event_name != 'workflow_dispatch' ||
-      github.event.inputs.platform == 'all' ||
-      matrix.platform == github.event.inputs.platform
 
     strategy:
       fail-fast: false
