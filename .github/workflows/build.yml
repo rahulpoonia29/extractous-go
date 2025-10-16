@@ -149,7 +149,6 @@ jobs:
         shell: bash
         run: |
           BUILD_START=$(date +%s)
-          export GRADLE_OPTS="-PnativeImageArgs=-H:NativeLinkerOption=-ldl -H:NativeLinkerOption=-lpthread -H:NativeLinkerOption=-lrt"
           cargo build --release --target ${{ matrix.target }}
           BUILD_END=$(date +%s)
           BUILD_TIME=$((BUILD_END - BUILD_START))
