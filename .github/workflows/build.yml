@@ -5,20 +5,10 @@ on:
     branches: [ main ]
     paths:
       - 'ffi/**'
-      - '*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/build.yml'
-      - '.github/workflows/scripts/**'
   pull_request:
     branches: [ main ]
     paths:
       - 'ffi/**'
-      - '*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/build.yml'
-      - '.github/workflows/scripts/**'
   workflow_dispatch:
   workflow_call:
     outputs:
@@ -54,12 +44,12 @@ jobs:
             os_name: Linux
             archive_ext: tar.gz
             
-          - os: windows-latest
-            platform: windows_amd64
-            target: x86_64-pc-windows-msvc
-            lib_ext: dll
-            os_name: Windows
-            archive_ext: zip
+          # - os: windows-latest
+          #   platform: windows_amd64
+          #   target: x86_64-pc-windows-msvc
+          #   lib_ext: dll
+          #   os_name: Windows
+          #   archive_ext: zip
             
           # - os: macos-13
           #   platform: darwin_amd64
@@ -68,12 +58,12 @@ jobs:
           #   os_name: macOS
           #   archive_ext: tar.gz
             
-          - os: macos-latest
-            platform: darwin_arm64
-            target: aarch64-apple-darwin
-            lib_ext: dylib
-            os_name: macOS
-            archive_ext: tar.gz
+          # - os: macos-latest
+          #   platform: darwin_arm64
+          #   target: aarch64-apple-darwin
+          #   lib_ext: dylib
+          #   os_name: macOS
+          #   archive_ext: tar.gz
 
     steps:
       - name: Checkout repository
@@ -159,7 +149,8 @@ jobs:
         shell: bash
         run: |
           BUILD_START=$(date +%s)
-          cargo build --release --target ${{ matrix.target }} --quiet
+          export GRADLE_OPTS="-PnativeImageArgs=-H:NativeLinkerOption=-ldl -H:NativeLinkerOption=-lpthread -H:NativeLinkerOption=-lrt"
+          cargo build --release --target ${{ matrix.target }}
           BUILD_END=$(date +%s)
           BUILD_TIME=$((BUILD_END - BUILD_START))
           echo "Build completed in ${BUILD_TIME}s"

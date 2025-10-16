@@ -64,6 +64,11 @@ if [ -d "$LIB_DIR" ]; then
     if [ "$LIB_COUNT" -gt 0 ]; then
         # Copy all libraries
         cp "$LIB_DIR"/*."$LIB_EXT" "dist/$PLATFORM/lib/" 2>/dev/null || true
+        echo "\n\n==========\n\n" 
+        ldd "$LIB_DIR"/libtika_native.so
+        echo "\n\n==========\n\n" 
+        nm -D "$LIB_DIR"/libtika_native.so | grep -E 'dlopen|pthread_create|clock_gettime'
+        echo "\n\n==========\n\n" 
         echo "✓ Copied $LIB_COUNT libraries from $LIB_DIR"
         
         # Show what we copied
