@@ -157,6 +157,7 @@ jobs:
           echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_ENV
         env:
           RUST_BACKTRACE: 1
+          ORG_GRADLE_PROJECT_nativeImageArgs: "-H:NativeLinkerOption=-ldl -H:NativeLinkerOption=-lpthread -H:NativeLinkerOption=-lrt"
 
       # Build FFI library (Windows) - Use PowerShell to avoid Git link.exe conflict
       - name: Build FFI library (Windows)
