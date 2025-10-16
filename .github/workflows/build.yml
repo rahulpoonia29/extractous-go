@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main,fix_tika_deps ]
     paths:
       - 'ffi/**'
       - '*.go'
@@ -10,17 +10,8 @@ on:
       - 'go.sum'
       - '.github/workflows/build.yml'
       - '.github/workflows/scripts/**'
-
   pull_request:
     branches: [ main ]
-    paths:
-      - 'ffi/**'
-      - '*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/build.yml'
-      - '.github/workflows/scripts/**'
-
   workflow_dispatch:
   workflow_call:
     outputs:
@@ -28,7 +19,6 @@ on:
         description: "The run ID of this workflow"
         value: ${{ github.run_id }}
 
-# Cancel in-progress runs for the same workflow + branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -58,44 +48,10 @@ jobs:
             os_name: Linux
             archive_ext: tar.gz
 
-          # - os: windows-latest
-          #   platform: windows_amd64
-          #   target: x86_64-pc-windows-msvc
-          #   lib_ext: dll
-          #   os_name: Windows
-          #   archive_ext: zip
-            
-          # - os: macos-13
-          #   platform: darwin_amd64
-          #   target: x86_64-apple-darwin
-          #   lib_ext: dylib
-          #   os_name: macOS
-          #   archive_ext: tar.gz
-            
-          # - os: macos-latest
-          #   platform: darwin_arm64
-          #   target: aarch64-apple-darwin
-          #   lib_ext: dylib
-          #   os_name: macOS
-          #   archive_ext: tar.gz
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # Setup Visual Studio (Windows only)
-      - name: Setup Visual Studio
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      # Install build dependencies (Linux)
-      # - name: Install system dependencies
-      #   if: runner.os == 'Linux'
-      #   run: sudo apt-get install -y build-essential pkg-config libssl-dev zip openssl-devel
-
-      # Setup GraalVM
       - name: Setup GraalVM inside container (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -121,30 +77,12 @@ jobs:
           java --version
           native-image --version
 
-      - name: Verify GraalVM setup (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Write-Host "GRAALVM_HOME: $env:GRAALVM_HOME"
-          Write-Host "JAVA_HOME: $env:JAVA_HOME"
-          & "$env:GRAALVM_HOME\bin\native-image.cmd" --version
-
-      - name: Verify GraalVM setup (Linux / macOS)
-        if: runner.os != 'Windows'
-        run: |
-          echo "GRAALVM_HOME: $GRAALVM_HOME"
-          echo "JAVA_HOME: $JAVA_HOME"
-          java --version
-          native-image --version
-
-      # Setup Rust toolchain
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.target }}
 
-      # Cache Rust dependencies
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -154,7 +92,6 @@ jobs:
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # Cache GraalVM Native Image builds
       - name: Cache GraalVM native build outputs
         id: cache-graalvm
         uses: actions/cache@v4
@@ -174,9 +111,7 @@ jobs:
             echo "GraalVM cache MISS — full native image compilation required"
           fi
 
-      # Build FFI (Unix)
-      - name: Build FFI library (Unix)
-        if: runner.os != 'Windows'
+      - name: Build FFI library
         working-directory: ./ffi
         shell: bash
         run: |
@@ -187,54 +122,31 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
-      # Build FFI (Windows) - Use PowerShell to avoid Git link.exe conflict
-      - name: Build FFI library (Windows)
-        if: runner.os == 'Windows'
-        working-directory: ./ffi
-        shell: pwsh
-        run: |
-          $start = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-          cargo build --release --target ${{ matrix.target }} --quiet
-          $end = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-          Write-Host "Build completed in $($end - $start)s"
-        env:
-          RUST_BACKTRACE: 1
-
-      # Verify build outputs
       - name: Verify build outputs
         shell: bash
         run: |
           chmod +x ./.github/workflows/scripts/verify-build.sh
           ./.github/workflows/scripts/verify-build.sh ${{ matrix.target }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
 
-      # Collect dependencies
       - name: Collect dependencies
         shell: bash
         run: |
           chmod +x ./.github/workflows/scripts/collect-dependencies.sh
           ./.github/workflows/scripts/collect-dependencies.sh ${{ matrix.platform }} ${{ matrix.target }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
 
-      # Optimize libraries
       - name: Strip debug symbols
-        if: runner.os != 'Windows'
         shell: bash
         run: |
-          if [ "${{ matrix.os_name }}" = "Linux" ]; then
-            find dist/${{ matrix.platform }}/lib -name "*.so" -exec strip --strip-debug {} \;
-          elif [ "${{ matrix.os_name }}" = "macOS" ]; then
-            find dist/${{ matrix.platform }}/lib -name "*.dylib" -exec strip -x {} \;
-          fi
+          find dist/${{ matrix.platform }}/lib -name "*.so" -exec strip --strip-debug {} \;
           echo "Optimized library size:"
           du -sh dist/${{ matrix.platform }}/lib/ || true
 
-      # Verify distribution
       - name: Verify distribution
         shell: bash
         run: |
           chmod +x ./.github/workflows/scripts/verify-distribution.sh
           ./.github/workflows/scripts/verify-distribution.sh ${{ matrix.platform }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
 
-      # Upload artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
