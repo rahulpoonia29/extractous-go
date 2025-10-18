@@ -114,10 +114,20 @@ jobs:
           restore-keys: |
             graalvm-v5-${{ runner.os }}-${{ matrix.target }}-
 
-      # Build FFI
-      - name: Build FFI library
+      - name: Build FFI library (Unix)
+        if: runner.os != 'Windows'
         working-directory: ./ffi
-        shell: ${{ runner.os == 'Windows' && 'cmd' || 'bash' }}
+        shell: bash
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+        env:
+          RUST_BACKTRACE: 1
+
+      # Build on Windows using PowerShell to avoid PATH issues with link.exe
+      - name: Build FFI library (Windows)
+        if: runner.os == 'Windows'
+        working-directory: ./ffi
+        shell: pwsh
         run: |
           cargo build --release --target ${{ matrix.target }}
         env:
