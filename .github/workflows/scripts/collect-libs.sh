@@ -72,9 +72,25 @@ if [ -z "$LIBS_DIR" ]; then
 fi
 
 # 3. Verify libtika_native exists
+# Try both with and without prefix for Windows compatibility
 TIKA_LIB="$LIBS_DIR/${TIKA_LIB_PREFIX}tika_native.$LIB_EXT"
+if [ ! -f "$TIKA_LIB" ] && [ "$OS" = "Windows" ]; then
+    # Try with lib prefix on Windows as fallback
+    TIKA_LIB_ALT="$LIBS_DIR/libtika_native.$LIB_EXT"
+    if [ -f "$TIKA_LIB_ALT" ]; then
+        TIKA_LIB="$TIKA_LIB_ALT"
+    fi
+fi
+
 if [ ! -f "$TIKA_LIB" ]; then
-    echo "✗ Error: libtika_native.$LIB_EXT not found in $LIBS_DIR"
+    echo "✗ Error: tika_native.$LIB_EXT not found in $LIBS_DIR"
+    echo "Directory contents:"
+    ls -lh "$LIBS_DIR" || echo "Directory not accessible"
+    
+    # Show all DLL/SO/DYLIB files to help debug
+    echo ""
+    echo "All native libraries found:"
+    find "$LIBS_DIR" -name "*.$LIB_EXT" -o -name "*.dll" -o -name "*.so" -o -name "*.dylib" 2>/dev/null || echo "None found"
     exit 1
 fi
 
