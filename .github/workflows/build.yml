@@ -137,8 +137,8 @@ jobs:
       - name: Collect libraries
         shell: bash
         run: |
-          chmod +x scripts/collect-libs.sh
-          ./scripts/collect-libs.sh ${{ matrix.platform }} ${{ matrix.target }} ${{ matrix.lib_ext }}
+          chmod +x .github/workflows/scripts/collect-libs.sh
+          .github/workflows/scripts/collect-libs.sh ${{ matrix.platform }} ${{ matrix.target }} ${{ matrix.lib_ext }}
 
       # Strip Debug Symbols
       - name: Optimize libraries (Unix)
