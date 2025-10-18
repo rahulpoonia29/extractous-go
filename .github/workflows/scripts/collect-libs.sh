@@ -49,16 +49,21 @@ echo ""
 echo "Searching for extractous dependencies..."
 
 BUILD_BASE="$RELEASE_DIR/build"
-LIBS_DIR=""
 
-# Find the extractous-* build directory with out/libs
-for build_dir in "$BUILD_BASE"/extractous-*; do
-    if [ -d "$build_dir/out/libs" ]; then
-        LIBS_DIR="$build_dir/out/libs"
-        echo "✓ Found libs directory: $LIBS_DIR"
-        break
-    fi
-done
+# Find all extractous-*/out/libs directories, sort by modification time (newest first)
+LIBS_DIR=$(find "$BUILD_BASE" -type d -path "*/extractous-*/out/libs" -printf "%T@ %p\n" 2>/dev/null | \
+           sort -rn | \
+           head -1 | \
+           cut -d' ' -f2)
+
+# Fallback for macOS (no -printf support)
+if [ -z "$LIBS_DIR" ]; then
+    LIBS_DIR=$(find "$BUILD_BASE" -type d -path "*/extractous-*/out/libs" -print 2>/dev/null | \
+               xargs -0 stat -f "%m %N" 2>/dev/null | \
+               sort -rn | \
+               head -1 | \
+               cut -d' ' -f2)
+fi
 
 if [ -z "$LIBS_DIR" ]; then
     echo "✗ Error: Could not find extractous out/libs directory"
