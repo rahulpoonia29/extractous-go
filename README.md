@@ -1,190 +1,214 @@
 <div align="center" style="margin-top: 20px">
-  <h1>extractous-go</h1>
+  <h1>Extractous Go</h1>
 </div>
 
 <div align="center">
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/rahulpoonia29/extractous-go.svg)](https://pkg.go.dev/github.com/rahulpoonia29/extractous-go)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-<img src="https://github.com/rahulpoonia29/extractous-go/actions/workflows/build.yml/badge.svg?branch=main" alt="Build">
+[![Build Status](https://github.com/rahulpoonia29/extractous-go/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/rahulpoonia29/extractous-go/actions/workflows/build.yml)
 
 </div>
 
-<div align="center">
-
-_Idiomatic Go bindings for [Extractous](https://github.com/yobix-ai/extractous), a high-performance library for extracting content and metadata from a wide variety of document formats._
-
-</div>
+Go bindings for [Extractous](https://github.com/yobix-ai/extractous) — a fast, Rust-powered document extraction engine built on Apache Tika and Tesseract OCR.
 
 ---
 
-This library brings the power and speed of the Rust-based `extractous` engine to the Go ecosystem. It uses CGO to wrap the native `extractous` FFI, providing a simple and efficient way to perform content extraction directly within your Go applications without relying on external services or APIs.
+## Features
 
-## Key Features
+- High-performance content extraction powered by Rust
+- Support for 60+ file formats (PDF, DOCX, XLSX, PPTX, HTML, etc.)
+- OCR capabilities for scanned documents and images via Tesseract
+- Streaming API for large file processing with low memory usage
+- Cross-platform support: Linux, macOS, Windows
 
-*   **High Performance**: Leverages the native speed and memory safety of the underlying Rust library.
-*   **Simple Go API**: Provides an idiomatic Go interface for a seamless developer experience.
-*   **Extensive Format Support**: Supports many file formats, including PDF, DOCX, XLSX, and more, by utilizing the power of Apache Tika compiled to a native library.
-*   **OCR Capabilities**: Can extract text from images and scanned documents via Tesseract.
-*   **Simple Installation**: Includes a command-line installer to automatically fetch the correct native libraries for your platform.
+---
 
 ## Installation
 
-Installation is a two-step process. First, you add the library to your project, and second, you run the installer to download the required native binaries.
-
-**Step 1: Add the library to your project**
-
 ```bash
+# Add the library
 go get github.com/rahulpoonia29/extractous-go
-```
 
-**Step 2: Download the native libraries**
-
-From the root of your project, run the installer. It will create a `native/` directory containing the platform-specific shared libraries.
-
-```bash
+# Download platform-specific native libraries
 go run github.com/rahulpoonia29/extractous-go/cmd/install@latest
 ```
 
-The installer provides several flags for more advanced use cases, such as cross-compilation:
+This installs the required native libraries under `native/`.
+Use `--platform` or `--all` for cross-platform builds.
 
-*   `--list-platforms`: List all available platforms from the latest release.
-*   `--platform <name>`: Download libraries for a specific platform (e.g., `linux_amd64`).
-*   `--all`: Download all available platforms.
+---
 
-## Quickstart
+## Quick Start
 
-Here are a few examples of how to use `extractous-go`.
-
-#### Extract content from a file to a string
+### Extract Text from a File
 
 ```go
 package main
 
 import (
-	"fmt"
-	"log"
-
-	"github.com/rahulpoonia29/extractous-go/src"
+    "fmt"
+    "log"
+    extractous "github.com/rahulpoonia29/extractous-go"
 )
 
 func main() {
-	// Create a new extractor
-	extractor := src.NewExtractor()
+    extractor := extractous.NewExtractor()
 
-	// Extract text from a file
-	content, metadata, err := extractor.ExtractFileToString("path/to/your/document.pdf")
-	if err != nil {
-		log.Fatalf("Failed to extract file: %v", err)
-	}
+    content, metadata, err := extractor.ExtractFileToString("document.pdf")
+    if err != nil {
+        log.Fatal(err)
+    }
 
-	fmt.Println("--- Extracted Content ---")
-	fmt.Println(content)
-
-	fmt.Println("\n--- Metadata ---")
-	for key, value := range metadata.AsMap() {
-		fmt.Printf("%s: %s\n", key, value)
-	}
+    fmt.Println(content)
+    fmt.Printf("Author: %s\n", metadata.Get("author"))
 }
 ```
 
-#### Extract content to a stream for buffered reading
-
-This is useful for large files to avoid loading the entire content into memory at once.
+### Stream Large Files
 
 ```go
-package main
+extractor := extractous.NewExtractor()
 
-import (
-	"fmt"
-	"io"
-	"log"
+reader, metadata, err := extractor.ExtractFile("large_document.pdf")
+if err != nil {
+    log.Fatal(err)
+}
+defer reader.Close()
 
-	"github.com/rahulpoonia29/extractous-go/src"
-)
-
-func main() {
-	extractor := src.NewExtractor()
-
-	// Get a reader for the extracted content
-	reader, metadata, err := extractor.ExtractFile("path/to/your/document.docx")
-	if err != nil {
-		log.Fatalf("Failed to get reader: %v", err)
-	}
-	defer reader.Close()
-
-	// Read the content in chunks
-	buffer := make([]byte, 4096)
-	content := ""
-	for {
-		n, err := reader.Read(buffer)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Fatalf("Failed to read from stream: %v", err)
-		}
-		content += string(buffer[:n])
-	}
-
-	fmt.Println("--- Extracted Content (from stream) ---")
-	fmt.Println(content)
-	fmt.Printf("\n--- Metadata ---\n%v\n", metadata.AsMap())
+buffer := make([]byte, 8192)
+for {
+    n, err := reader.Read(buffer)
+    if err == io.EOF {
+        break
+    }
+    if err != nil {
+        log.Fatal(err)
+    }
+    // Process buffer[:n]
 }
 ```
 
-## Distributing Your Application (e.g., with Wails)
+### Advanced Configuration
 
-Because this library uses CGO with **dynamically linked** native libraries (`.so`, `.dylib`, `.dll`), you must bundle these files with your final application. If you don't, your users will encounter runtime errors.
+```go
+pdfConfig := extractous.NewPdfConfig().
+    SetOcrStrategy(extractous.PdfOcrAuto).
+    SetExtractInlineImages(true)
 
-The process involves copying the libraries from the `native/` directory into your application package.
+extractor := extractous.NewExtractor().
+    SetPdfConfig(pdfConfig)
 
-### Example: Wails v3 Build Configuration
-
-If you are building a desktop app with Wails, you can automate this by modifying the platform-specific `Taskfile.yml` in your Wails project's `build/` directory.
-
-**For macOS (`build/darwin/Taskfile.yml`)**
-
-Add a task to copy the `.dylib` files into the `.app` bundle's `Contents/Frameworks` directory and make the `build` task depend on it.
-
-```yaml
-tasks:
-  # ... other tasks
-  copy-native-libs:
-    summary: Copies the extractous-go native libraries.
-    vars:
-      LIB_PATH: '{{.ROOT_DIR}}/native/darwin_{{.ARCH}}/lib'
-      TARGET_DIR: '{{.ROOT_DIR}}/build/bin/{{.APP_NAME}}.app/Contents/Frameworks'
-    cmds:
-      - mkdir -p {{.TARGET_DIR}}
-      - cp {{.LIB_PATH}}/*.dylib {{.TARGET_DIR}}/
-    preconditions:
-      - sh: test -d {{.LIB_PATH}}
-        msg: "Native libraries not found. Run 'go run github.com/rahulpoonia29/extractous-go/cmd/install@latest' first."
-
-  build:
-    deps:
-      - task: common:build-frontend
-      - task: copy-native-libs # Add this dependency
-    # ... rest of build command
+content, _, err := extractor.ExtractFileToString("document.pdf")
 ```
 
-Similar modifications are needed for Linux (copying `.so` files and setting `rpath`) and Windows (copying `.dll` files next to the `.exe`). For detailed instructions, please refer to the guidance provided in the project's issue tracker or documentation.
+---
 
-## Roadmap (TODO)
+## Distribution
 
-This library is under active development. Future plans include:
+This library uses CGO and dynamically linked native libraries.
+When distributing applications, bundle the required shared libraries (`.so`, `.dylib`, `.dll`) with your executable.
 
-- [ ] **Checksum Verification**: Add SHA256 checksum validation to the installer for improved security.
-- [ ] **API Enhancement**: Expose more of the underlying `extractous` configuration options (e.g., for OCR, PDF parsing).
-- [ ] **Static Linking**: Investigate providing a build option for static linking to simplify distribution.
-- [ ] **More Examples**: Add more detailed examples, including for OCR and URL extraction.
-- [ ] **Comprehensive Error Handling**: Improve error types to provide more context on failures.
+---
 
-## Acknowledgments
+## Building & Running
 
-This project is a Go wrapper around the excellent [Extractous](https://github.com/yobix-ai/extractous) library. All credit for the high-performance extraction engine goes to its creators.
+### 1. Linux
 
-## 🕮 License
+```bash
+# Enable CGO and set compiler
+export CGO_ENABLED=1
+export CC=gcc
+export CXX=g++
 
-This project is licensed under the **Apache-2.0 license**. See the [LICENSE](LICENSE) file for details.
+# Set header and library paths
+export CGO_CFLAGS="-I$(pwd)/native/linux_amd64/include"
+export CGO_LDFLAGS="-L$(pwd)/native/linux_amd64/lib -lextractous_ffi -lstdc++ -Wl,-rpath,$(pwd)/native/linux_amd64/lib"
+
+# Build and run
+go build main.go
+./main
+```
+
+### 2. macOS
+
+```bash
+# Enable CGO and set compiler
+export CGO_ENABLED=1
+export CC=clang
+export CXX=clang++
+
+# Set header and library paths
+export CGO_CFLAGS="-I$(pwd)/native/darwin_arm64/include"
+export CGO_LDFLAGS="-L$(pwd)/native/darwin_arm64/lib -lextractous_ffi -lc++ -Wl,-rpath,$(pwd)/native/darwin_arm64/lib"
+
+# Build and run
+go build main.go
+./main
+```
+
+### 3. Windows (PowerShell)
+
+```powershell
+# Enable CGO and set compiler
+$env:CGO_ENABLED = 1
+$env:CC = "C:\msys64\mingw64\bin\gcc.exe"
+$env:CXX = "C:\msys64\mingw64\bin\g++.exe"
+$env:Path = "C:\msys64\mingw64\bin;" + $env:Path
+
+# Set header and library paths
+$env:CGO_CFLAGS = "-I$(pwd)\native\windows_amd64\include"
+$env:CGO_LDFLAGS = "-L$(pwd)\native\windows_amd64\lib -lextractous_ffi"
+
+# Build the executable
+go build main.go
+
+# Copy the binary next to the DLLs and run
+copy main.exe native\windows_amd64\lib\
+cd native\windows_amd64\lib
+.\main.exe
+```
+
+---
+
+## Performance
+
+| Library           | Throughput (MB/s) | Memory (MB) | Accuracy (%) |
+| ----------------- | ----------------- | ----------- | ------------ |
+| extractous-string | 36.70             | 15.78       | 86.95        |
+| extractous-stream | 14.16             | 21.83       | 87.74        |
+| ledongthuc-pdf    | 79.38             | 44.67       | 82.02        |
+
+---
+
+## Supported Formats
+
+- PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX
+- HTML, XML, Markdown, TXT, RTF, CSV
+- OpenDocument (ODT, ODS, ODP)
+- And many more...
+
+See [Apache Tika Supported Formats](https://tika.apache.org/2.0.0/formats.html) for the full list.
+
+---
+
+## Requirements
+
+- Go 1.19 or later
+- CGO enabled
+- Platform-specific native libraries (installed via the `install` command)
+- Tesseract (only required for OCR functionality)
+
+---
+
+## Roadmap
+
+- [ ] Complete Windows custom loader implementation
+- [ ] Add checksum verification to installer
+- [ ] Add tests for FFI layer and Go bindings
+
+---
+
+## License
+
+Licensed under the Apache License 2.0 — see [LICENSE](LICENSE) for details.

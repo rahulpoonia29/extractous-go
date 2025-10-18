@@ -58,18 +58,30 @@ LIBS_DIR=$(find "$BUILD_BASE" -type d -path "*/extractous-*/out/libs" -printf "%
 
 # Fallback for macOS (no -printf support)
 if [ -z "$LIBS_DIR" ]; then
-    LIBS_DIR=$(find "$BUILD_BASE" -type d -path "*/extractous-*/out/libs" -print 2>/dev/null | \
-               xargs -0 stat -f "%m %N" 2>/dev/null | \
-               sort -rn | \
-               head -1 | \
-               cut -d' ' -f2)
+    # Find all matching directories
+    FOUND_DIRS=$(find "$BUILD_BASE" -type d -path "*/extractous-*/out/libs" 2>/dev/null)
+    
+    if [ -n "$FOUND_DIRS" ]; then
+        # Get the most recently modified directory
+        LIBS_DIR=$(echo "$FOUND_DIRS" | while read -r dir; do
+            echo "$(stat -f "%m" "$dir") $dir"
+        done | sort -rn | head -1 | cut -d' ' -f2-)
+    fi
 fi
 
 if [ -z "$LIBS_DIR" ]; then
     echo "✗ Error: Could not find extractous out/libs directory"
     echo "Searched in: $BUILD_BASE/extractous-*/out/libs"
+    echo ""
+    echo "Available build directories:"
+    find "$BUILD_BASE" -type d -name "extractous-*" 2>/dev/null || echo "None found"
+    echo ""
+    echo "Checking for out directories:"
+    find "$BUILD_BASE" -type d -name "out" 2>/dev/null || echo "None found"
     exit 1
 fi
+
+echo "✓ Found libs directory: $LIBS_DIR"
 
 # 3. Verify libtika_native exists
 # Try both with and without prefix for Windows compatibility

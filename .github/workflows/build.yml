@@ -1,18 +1,18 @@
 name: Build Cross-Platform
 
 on:
-  # push:
-  #   branches: [ main ]
-  #   paths:
-      # - 'ffi/**'
-      # - '.github/workflows/build.yml'
-      # - '.github/workflows/scripts/**'
-  # pull_request:
-  #   branches: [ main ]
-  #   paths:
-      # - 'ffi/**'
-      # - '.github/workflows/build.yml'
-      # - '.github/workflows/scripts/**'
+  push:
+    branches: [main]
+    paths:
+      - "ffi/**"
+      - ".github/workflows/build.yml"
+      - ".github/workflows/scripts/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "ffi/**"
+      - ".github/workflows/build.yml"
+      - ".github/workflows/scripts/**"
   workflow_dispatch:
   workflow_call:
     outputs:
