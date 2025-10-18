@@ -1,11 +1,24 @@
 name: Build Cross-Platform
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  # push:
+  #   branches: [ main ]
+  #   paths:
+      # - 'ffi/**'
+      # - '.github/workflows/build.yml'
+      # - '.github/workflows/scripts/**'
+  # pull_request:
+  #   branches: [ main ]
+  #   paths:
+      # - 'ffi/**'
+      # - '.github/workflows/build.yml'
+      # - '.github/workflows/scripts/**'
   workflow_dispatch:
+  workflow_call:
+    outputs:
+      run_id:
+        description: "The run ID of this workflow"
+        value: ${{ github.run_id }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -33,10 +46,10 @@ jobs:
             target: x86_64-pc-windows-msvc
             lib_ext: dll
 
-          # - os: macos-latest
-          #   platform: darwin_arm64
-          #   target: aarch64-apple-darwin
-          #   lib_ext: dylib
+          - os: macos-latest
+            platform: darwin_arm64
+            target: aarch64-apple-darwin
+            lib_ext: dylib
 
     steps:
       - name: Checkout
@@ -53,7 +66,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev
+          sudo apt-get install -y build-essential pkg-config libssl-dev tree
 
       # GraalVM Setup
       - name: Setup GraalVM

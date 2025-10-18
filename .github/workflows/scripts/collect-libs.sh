@@ -110,7 +110,7 @@ LIB_COUNT=$(find "$DIST_DIR/lib" -name "*.$LIB_EXT" | wc -l)
 echo "✓ Copied $LIB_COUNT libraries"
 
 # 5. Copy C header
-HEADER="../include/extractous.h"
+HEADER="./include/extractous.h"
 if [ -f "$HEADER" ]; then
     cp "$HEADER" "$DIST_DIR/include/"
     echo "✓ Copied C header"
