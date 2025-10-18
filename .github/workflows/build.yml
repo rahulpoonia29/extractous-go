@@ -1,32 +1,12 @@
-name: Build
+name: Build Cross-Platform
 
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'ffi/**'
-      - '*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/build.yml'
-      - '.github/workflows/scripts/**'
+    branches: [main]
   pull_request:
-    branches: [ main ]
-    paths:
-      - 'ffi/**'
-      - '*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/build.yml'
-      - '.github/workflows/scripts/**'
+    branches: [main]
   workflow_dispatch:
-  workflow_call:
-    outputs:
-      run_id:
-        description: "The run ID of this workflow"
-        value: ${{ github.run_id }}
 
-# Cancel in-progress runs for the same workflow + branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -34,10 +14,6 @@ concurrency:
 env:
   RUST_VERSION: "1.90.0"
   CARGO_TERM_COLOR: always
-
-permissions:
-  contents: read
-  actions: read
 
 jobs:
   build:
@@ -51,82 +27,78 @@ jobs:
             platform: linux_amd64
             target: x86_64-unknown-linux-gnu
             lib_ext: so
-            os_name: Linux
-            archive_ext: tar.gz
-            
+
           - os: windows-latest
             platform: windows_amd64
             target: x86_64-pc-windows-msvc
             lib_ext: dll
-            os_name: Windows
-            archive_ext: zip
-            
-          # - os: macos-13
-          #   platform: darwin_amd64
-          #   target: x86_64-apple-darwin
+
+          # - os: macos-latest
+          #   platform: darwin_arm64
+          #   target: aarch64-apple-darwin
           #   lib_ext: dylib
-          #   os_name: macOS
-          #   archive_ext: tar.gz
-            
-          - os: macos-latest
-            platform: darwin_arm64
-            target: aarch64-apple-darwin
-            lib_ext: dylib
-            os_name: macOS
-            archive_ext: tar.gz
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # Platform-specific Setup
-      - name: Setup Visual Studio (Windows)
+      # Platform Setup
+      - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      - name: Install system dependencies (Linux)
+      - name: Install build dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
+          sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev
 
+      # GraalVM Setup
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '23'
-          distribution: 'graalvm-community'
+          java-version: "23"
+          distribution: "graalvm-community"
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          native-image-job-reports: 'false'
-          set-java-home: 'true'
+          native-image-job-reports: "false"
+          set-java-home: "true"
 
-      - name: Verify GraalVM setup (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Verify GraalVM
+        shell: bash
         run: |
-          Write-Host "GRAALVM_HOME: $env:GRAALVM_HOME"
-          Write-Host "JAVA_HOME: $env:JAVA_HOME"
-          & "$env:GRAALVM_HOME\bin\native-image.cmd" --version
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            # On Windows, convert path and use .cmd extension
+            GRAALVM_HOME_UNIX=$(cygpath "$GRAALVM_HOME")
+            JAVA_HOME_UNIX=$(cygpath "$JAVA_HOME")
+            echo "GRAALVM_HOME (Windows): $GRAALVM_HOME"
+            echo "GRAALVM_HOME (Unix): $GRAALVM_HOME_UNIX"
+            echo "JAVA_HOME (Windows): $JAVA_HOME"
+            echo "JAVA_HOME (Unix): $JAVA_HOME_UNIX"
+            
+            # Call native-image with Windows path
+            "$GRAALVM_HOME/bin/native-image.cmd" --version
+          else
+            # Unix systems work normally
+            echo "GRAALVM_HOME: $GRAALVM_HOME"
+            echo "JAVA_HOME: $JAVA_HOME"
+            java --version
+            native-image --version
+          fi
 
-      - name: Verify GraalVM setup (Linux / macOS)
-        if: runner.os != 'Windows'
-        run: |
-          echo "GRAALVM_HOME: $GRAALVM_HOME"
-          echo "JAVA_HOME: $JAVA_HOME"
-          java --version
-          native-image --version
-
-      # Rust Toolchain
-      - name: Setup Rust toolchain
+      # Rust Setup
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.target }}
 
+      # Aggressive Caching Strategy
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "v1-rust"
+          prefix-key: "v2-rust"
           shared-key: ${{ matrix.target }}
           workspaces: "./ffi"
           cache-on-failure: true
@@ -138,90 +110,44 @@ jobs:
         with:
           path: |
             ffi/target/${{ matrix.target }}/release/build/extractous-*/out
-          key: graalvm-v4-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('ffi/Cargo.lock', 'ffi/Cargo.toml', 'ffi/build.rs') }}
+          key: graalvm-v5-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('ffi/Cargo.toml') }}
           restore-keys: |
-            graalvm-v4-${{ runner.os }}-${{ matrix.target }}-
+            graalvm-v5-${{ runner.os }}-${{ matrix.target }}-
 
-      - name: Cache status
-        shell: bash
-        run: |
-          if [ "${{ steps.cache-graalvm.outputs.cache-hit }}" = "true" ]; then
-            echo "✓ GraalVM cache HIT - Native image compilation will be skipped"
-          else
-            echo "⚠ GraalVM cache MISS - Full native image compilation required (~5-6 minutes)"
-          fi
-
-
-      # Build FFI library (Unix)
-      - name: Build FFI library (Unix)
-        if: runner.os != 'Windows'
+      # Build FFI
+      - name: Build FFI library
         working-directory: ./ffi
-        shell: bash
+        shell: ${{ runner.os == 'Windows' && 'cmd' || 'bash' }}
         run: |
-          BUILD_START=$(date +%s)
-          cargo build --release --target ${{ matrix.target }} --quiet
-          BUILD_END=$(date +%s)
-          BUILD_TIME=$((BUILD_END - BUILD_START))
-          echo "Build completed in ${BUILD_TIME}s"
-          echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_ENV
+          cargo build --release --target ${{ matrix.target }}
         env:
           RUST_BACKTRACE: 1
-
-      # Build FFI library (Windows) - Use PowerShell to avoid Git link.exe conflict
-      - name: Build FFI library (Windows)
-        if: runner.os == 'Windows'
-        working-directory: ./ffi
-        shell: pwsh
-        run: |
-          $BUILD_START = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-          cargo build --release --target ${{ matrix.target }} --quiet
-          $BUILD_END = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-          $BUILD_TIME = $BUILD_END - $BUILD_START
-          Write-Host "Build completed in ${BUILD_TIME}s"
-          "BUILD_TIME=$BUILD_TIME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        env:
-          RUST_BACKTRACE: 1
-
-
-      # Verify Build
-      - name: Verify build outputs
-        shell: bash
-        run: |
-          chmod +x ./.github/workflows/scripts/verify-build.sh
-          ./.github/workflows/scripts/verify-build.sh ${{ matrix.target }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
 
       # Collect Dependencies
-      - name: Collect dependencies
+      - name: Collect libraries
         shell: bash
         run: |
-          chmod +x ./.github/workflows/scripts/collect-dependencies.sh
-          ./.github/workflows/scripts/collect-dependencies.sh ${{ matrix.platform }} ${{ matrix.target }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
+          chmod +x scripts/collect-libs.sh
+          ./scripts/collect-libs.sh ${{ matrix.platform }} ${{ matrix.target }} ${{ matrix.lib_ext }}
 
-      # Optimize Libraries
-      - name: Strip debug symbols (Linux/macOS)
+      # Strip Debug Symbols
+      - name: Optimize libraries (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          if [ "${{ matrix.os_name }}" = "Linux" ]; then
-            find dist/${{ matrix.platform }}/lib -name "*.so" -exec strip --strip-debug {} \;
-          elif [ "${{ matrix.os_name }}" = "macOS" ]; then
-            find dist/${{ matrix.platform }}/lib -name "*.dylib" -exec strip -x {} \;
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            find dist/${{ matrix.platform }}/lib -name "*.${{ matrix.lib_ext }}" -exec strip --strip-debug {} \;
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            find dist/${{ matrix.platform }}/lib -name "*.${{ matrix.lib_ext }}" -exec strip -x {} \;
           fi
           echo "Optimized size: $(du -sh dist/${{ matrix.platform }}/lib/ | cut -f1)"
 
-      # Verify Distribution
-      - name: Verify distribution
-        shell: bash
-        run: |
-          chmod +x ./.github/workflows/scripts/verify-distribution.sh
-          ./.github/workflows/scripts/verify-distribution.sh ${{ matrix.platform }} ${{ matrix.lib_ext }} ${{ matrix.os_name }}
-
       # Upload Artifacts
-      - name: Upload build artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: extractous-ffi-${{ matrix.platform }}
           path: dist/${{ matrix.platform }}
-          retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}
+          retention-days: 7
           compression-level: 9
           if-no-files-found: error

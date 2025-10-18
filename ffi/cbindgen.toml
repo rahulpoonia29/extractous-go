@@ -9,25 +9,39 @@ header = """
  * License: Apache-2.0
  * Repository: https://github.com/rahulpoonia229/extractous-go
  *
-# Includes (only standard C headers)
- * NOTE: All pointers returned by Extractous functions m
-# Documentation
-
-ust be freed
- * using the corresponding free functions.
+ * MEMORY MANAGEMENT:
+ * All pointers returned by Extractous functions must be freed using the function extractous_free_string.
+ * Failure to do so will result in memory leaks.
+ *
+ *
+ * CGO USAGE:
+ *   // #cgo CFLAGS: -I${SRCDIR}/include
+ *   // #cgo LDFLAGS: -L${SRCDIR}/lib -lextractous_ffi
+ *   // #cgo linux LDFLAGS: -Wl,-rpath,$ORIGIN
+ *   // #cgo darwin LDFLAGS: -Wl,-rpath,@loader_path
+ *   // #include "extractous.h"
+ *   import "C"
  */
 """
 
+# Generate pure C header (no C++)
+language = "C"
+style = "both"          # Both function declarations and typedef definitions
+cpp_compat = false      # No C++ compatibility
 
-language = "C"     # Generate pure C header (no C++)
-style = "both"     # Function prototypes + typedefs
-cpp_compat = false # Disable any C++ compatibility
+# Includes
+include_guard = "EXTRACTOUS_H"  # Add header guard
+sys_includes = []               # No system includes needed
+includes = []                   # No additional includes
 
+# Warnings
+documentation = true            # Include Rust doc comments
+documentation_style = "c"       # Use C-style /** */ comments
 
 [export]
-include = [] # Include all public items
-exclude = []
-prefix = "" # No custom prefix
+include = []                    # Include all public items
+exclude = []                    # No exclusions
+prefix = ""                     # No prefix for function names
 item_types = [
   "globals",
   "enums",
@@ -39,58 +53,43 @@ item_types = [
   "constants",
 ]
 
-
 [layout]
-# Must be string values ("true"/"false")
-packed = "false"
-aligned_n = "0"
+packed = "false"                # No packed structs (better portability)
+aligned_n = "0"                 # Natural alignment
 
-
-# Function configuration
 [fn]
-rename_args = "None"
-args = "auto"
-must_use = "auto"
-swift_name_macro = ""
-no_return = "noreturn"
+rename_args = "None"            # Keep original arg names
+args = "auto"                   # Auto-detect by-value vs by-reference
+must_use = "auto"               # Add [[nodiscard]] for important returns
+no_return = "noreturn"          # Use noreturn attribute where applicable
 
-
-# Struct configuration
 [struct]
-rename_fields = "None"
-derive_constructor = false
-derive_eq = false
+rename_fields = "None"          # Keep original field names
+derive_constructor = false      # No C++ constructors
+derive_eq = false               # No operator overloads
 derive_neq = false
 derive_lt = false
 derive_lte = false
 derive_gt = false
 derive_gte = false
 
-
-# Enum configuration
 [enum]
-rename_variants = "None"
-enum_class = false       # Force C-style enums
-prefix_with_name = false
+rename_variants = "None"        # Keep original variant names
+enum_class = false              # C-style enums (not enum class)
+prefix_with_name = false        # No enum name prefix on variants
 
-
-# Constant configuration
 [const]
-allow_static_const = true
-allow_constexpr = false
+allow_static_const = true       # Allow static const declarations
+allow_constexpr = false         # No constexpr (C++ feature)
 
-
-# Macro expansion configuration
 [macro_expansion]
-bitflags = false
+bitflags = false                # Don't expand bitflags macros
 
-
-# Parsing configuration
 [parse]
-parse_deps = false
+parse_deps = false              # Don't parse dependencies
 include = []
 exclude = []
-clean = false
+clean = false                   # Don't remove items
 extra_bindings = []
 
 [parse.expand]
