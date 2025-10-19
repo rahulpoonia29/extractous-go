@@ -68,12 +68,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev tree
 
-      # GraalVM Setup
-      - name: Setup GraalVM
+      # GraalVM Setup - Platform specific
+      # https://github.com/oracle/graal/issues/4921
+      - name: Setup GraalVM (macOS)
+        if: runner.os == 'macOS'
         uses: graalvm/setup-graalvm@v1
         with:
           java-version: "23"
-          distribution: "graalvm-community"
+          distribution: "liberica"  # Use Liberica NIK for macOS for AWT metadata support
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: "false"
+          set-java-home: "true"
+
+      - name: Setup GraalVM (Linux/Windows)
+        if: runner.os != 'macOS'
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "23"
+          distribution: "graalvm-community"  # Keep GraalVM CE for Linux/Windows
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: "false"
           set-java-home: "true"
