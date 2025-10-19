@@ -159,9 +159,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Linux" ]; then
-            find dist/${{ matrix.platform }}/lib -name "*.${{ matrix.lib_ext }}" -exec strip --strip-debug {} \;
+            find dist/${{ matrix.platform }} -name "*.${{ matrix.lib_ext }}" -exec strip --strip-debug {} \;
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            find dist/${{ matrix.platform }}/lib -name "*.${{ matrix.lib_ext }}" -exec strip -x {} \;
+            find dist/${{ matrix.platform }} -name "*.${{ matrix.lib_ext }}" -exec strip -x {} \;
           fi
           echo "Optimized size: $(du -sh dist/${{ matrix.platform }}/lib/ | cut -f1)"
 
