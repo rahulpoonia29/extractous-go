@@ -49,11 +49,15 @@ package main
 import (
     "fmt"
     "log"
-    extractous "github.com/rahulpoonia29/extractous-go"
+    "github.com/rahulpoonia29/extractous-go"
 )
 
 func main() {
-    extractor := extractous.NewExtractor()
+    extractor := extractous.New()
+    if extractor == nil {
+		log.Fatal("Failed to create extractor")
+	}
+	defer extractor.Close()
 
     content, metadata, err := extractor.ExtractFileToString("document.pdf")
     if err != nil {
@@ -68,7 +72,11 @@ func main() {
 ### Stream Large Files
 
 ```go
-extractor := extractous.NewExtractor()
+extractor := extractous.New()
+if extractor == nil {
+	log.Fatal("Failed to create extractor")
+}
+defer extractor.Close()
 
 reader, metadata, err := extractor.ExtractFile("large_document.pdf")
 if err != nil {
@@ -82,12 +90,14 @@ for {
     if err == io.EOF {
         break
     }
-    if err != nil {
+    if err != nil && err != io.EOF {
         log.Fatal(err)
     }
     // Process buffer[:n]
 }
 ```
+
+See ([examples](./examples)) for more usage patterns.
 
 ### Advanced Configuration
 
@@ -96,7 +106,7 @@ pdfConfig := extractous.NewPdfConfig().
     SetOcrStrategy(extractous.PdfOcrAuto).
     SetExtractInlineImages(true)
 
-extractor := extractous.NewExtractor().
+extractor := extractous.New().
     SetPdfConfig(pdfConfig)
 
 content, _, err := extractor.ExtractFileToString("document.pdf")
