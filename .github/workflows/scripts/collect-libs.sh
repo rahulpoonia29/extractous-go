@@ -120,9 +120,10 @@ cp "$LIBS_DIR"/*."$LIB_EXT" "$DIST_DIR" || {
 if [ "$OS" = "macOS" ]; then
 	echo ""
 	echo "Verify XCode tools"    
+	# XCode tools are present on github macOS runners by default, but verify anyway
 	which otool || { echo "✗ otool not found"; exit 1; }
 	which install_name_tool || { echo "✗ install_name_tool not found"; exit 1; }
-	otool -L /usr/lib/libSystem.B.dylib || { echo "✗ otool test failed"; exit 1; }
+	otool -L "$DIST_DIR/libextractous_ffi.dylib" || { echo "✗ otool test failed"; exit 1; }
 
 	echo "Patching libextractous_ffi.dylib to use @loader_path for tika"
 	OLD_PATH=$(otool -L "$DIST_DIR/libextractous_ffi.dylib" | grep libtika_native.dylib | awk '{print $1}')
