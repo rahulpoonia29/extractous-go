@@ -68,12 +68,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev tree
 
-      # GraalVM Setup
-      - name: Setup GraalVM
+      # GraalVM Setup - Platform specific
+      # https://github.com/oracle/graal/issues/4921
+      - name: Setup GraalVM (macOS)
+        if: runner.os == 'macOS'
         uses: graalvm/setup-graalvm@v1
         with:
           java-version: "23"
-          distribution: "graalvm-community"
+          distribution: "liberica"  # Use Liberica NIK for macOS for AWT metadata support
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: "false"
+          set-java-home: "true"
+
+      - name: Setup GraalVM (Linux/Windows)
+        if: runner.os != 'macOS'
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "23"
+          distribution: "graalvm-community"  # Keep GraalVM CE for Linux/Windows
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: "false"
           set-java-home: "true"
@@ -159,9 +171,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Linux" ]; then
-            find dist/${{ matrix.platform }}/lib -name "*.${{ matrix.lib_ext }}" -exec strip --strip-debug {} \;
+            find dist/${{ matrix.platform }} -name "*.${{ matrix.lib_ext }}" -exec strip --strip-debug {} \;
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            find dist/${{ matrix.platform }}/lib -name "*.${{ matrix.lib_ext }}" -exec strip -x {} \;
+            find dist/${{ matrix.platform }} -name "*.${{ matrix.lib_ext }}" -exec strip -x {} \;
           fi
           echo "Optimized size: $(du -sh dist/${{ matrix.platform }}/lib/ | cut -f1)"
 

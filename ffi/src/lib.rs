@@ -1,144 +1,117 @@
-//! # Extractous FFI
-//!
-//! High-performance C FFI for the Extractous document extraction library, safe and easy
-//! to use from C, Go (via cgo), or Rust.
-//!
-//! ## Overview
-//!
 //! This crate provides a **C-compatible Foreign Function Interface (FFI)** for the
-//! Extractous library, enabling seamless integration with external programs. Extractous
-//! is a fast and efficient solution for extracting content and metadata from various
-//! document formats including PDF, Word, Excel, HTML, and more.
+//! Extractous library. Extractous is a fast and efficient solution for extracting
+//! content and metadata from various document formats including PDF, Word, Excel, and more.
+//!
+//! This FFI layer is meticulously designed for safety and performance, featuring:
+//! - Opaque pointers to prevent unsafe access to internal data structures.
+//! - A robust, thread-safe error handling mechanism with on-demand debug info.
+//! - A clear memory ownership model with explicit `_new` and `_free` functions.
 //!
 //! ## Quick Start
 //!
-//! ```c
-//! // Create extractor
+//! ```
+//! // 1. Create an extractor instance.
 //! CExtractor* extractor = extractous_extractor_new();
 //!
-//! // Configure extractor (builder pattern)
-//! extractor = extractous_extractor_set_xml_output(extractor, true);
+//! // 2. Configure the extractor. Setters modify the object in-place.
+//! //    DO NOT re-assign the pointer.
+//! extractous_extractor_set_xml_output(extractor, true);
 //!
-//! // Extract content and metadata
-//! char* content;
-//! CMetadata* metadata;
+//! // 3. Extract content and metadata from a file.
+//! char* content = NULL;
+//! CMetadata* metadata = NULL;
 //! int result = extractous_extractor_extract_file_to_string(
 //!     extractor, "document.pdf", &content, &metadata
 //! );
 //!
-//! // Use results...
-//! printf("Content: %s\n", content);
+//! // 4. Check for errors and handle them.
+//! if (result != ERR_OK) {
+//!     // Handle the error (see Error Handling section).
+//!     fprintf(stderr, "Extraction failed with code: %d\n", result);
+//! } else {
+//!     // 5. Use the results.
+//!     printf("Content: %s\n", content);
+//! }
 //!
-//! //Clean up in reverse allocation order
+//! // 6. Clean up all allocated resources in reverse order.
 //! extractous_string_free(content);
 //! extractous_metadata_free(metadata);
 //! extractous_extractor_free(extractor);
 //! ```
 //!
-//! ## Modules
+//! ## Thread Safety
 //!
-//! | Module     | Purpose                                      |
-//! |------------|----------------------------------------------|
-//! | extractor  | File, URL, and byte-array extraction         |
-//! | stream     | Buffered reading for large documents         |
-//! | metadata   | Access and manipulate document metadata      |
-//! | config     | PDF, Office, and OCR configuration settings  |
-//! | types      | Type definitions, constants, opaque handles  |
-//! | errors     | Error codes and human-readable messages      |
+//! - **Extractor Instances**: `CExtractor` and its associated config/stream objects are
+//!   **NOT thread-safe**. Do not share a handle across threads. The recommended pattern is
+//!   to create one `CExtractor` instance per thread that needs it.
+//! - **Error Handling**: The error reporting system **IS thread-safe**. Each thread stores
+//!   its own last error information independently, preventing race conditions. You can safely
+//!   call error-handling functions from any thread.
 //!
-//! ## Streams
+//! # Advanced Error Handling
 //!
-//! Streams allow reading large documents **without loading all content into memory**.
+//! This library uses a powerful two-tier error system for maximum performance and diagnostics.
 //!
-//! - `extractous_stream_read` → read chunks of data into a buffer
-//! - `extractous_stream_read_exact` → read a fixed number of bytes
-//! - `extractous_stream_read_all` → read remaining content into a newly allocated buffer
-//! - `extractous_buffer_free` → free memory allocated by `read_all`
+//! ### Tier 1: Fast Path (Error Codes)
 //!
-//! **Tip:** Use streams for large files. For small files, `read_all` is convenient.
+//! All FFI functions return an integer error code. `ERR_OK` (0) signifies success. This allows
+//! for a very fast check without any overhead.
 //!
-//! ## Metadata
+//! ### Tier 2: Slow Path (On-Demand Detailed Info)
 //!
-//! Metadata is represented by `CMetadata` containing parallel arrays of keys and values.
-//! - Keys may have multiple values, comma-separated.
-//! - All allocated metadata must be freed with `extractous_metadata_free()`.
+//! When an error occurs, you can request more information on demand.
 //!
-//! ## Memory Safety
+//! **1. Get the Error Category:**
+//! Use `extractous_error_category()` to get a stable, machine-readable string
+//! representing the *type* of error. This is perfect for building idiomatic Go error wrappers.
+//! The returned pointer is static and **must not be freed**.
 //!
-//! - **Pointer Validity:** All pointers must be valid and properly aligned.
-//! - **String Encoding:** Null-terminated UTF-8 strings are required.
-//! - **Memory Ownership:** Use the correct `free` function for all allocated objects.
-//! - **No Use-After-Free:** Do not use pointers after freeing.
-//! - **Thread Safety:** Extractor instances are not thread-safe; use separate instances per thread.
+//! **2. Get a Simple Message:**
+//! Use `extractous_error_message()` to get a simple, human-readable description.
+//! The returned string **must be freed** with `extractous_string_free()`.
 //!
-//! # Error Handling
+//! **3. Get a Full Debug Report:**
+//! If `extractous_error_has_debug()` returns `1`, you can call `extractous_error_get_last_debug()`
+//! to get a detailed report, including the full error chain and a backtrace (if enabled with `RUST_BACKTRACE=1`).
+//! The returned string **must be freed**.
 //!
-//! This module defines error codes and provides utilities for FFI-safe error handling.
-//! All errors are represented as integer codes for C compatibility. Human-readable
-//! messages can be retrieved with `extractous_error_message()`.
+//! ### Go Usage Pattern
 //!
-//! ## Error Codes
+//! ```
+//! // (Inside a function that calls the FFI)
+//! resultCode := C.some_extractous_function(...)
+//! if resultCode != C.ERR_OK {
+//!     // Get stable category for idiomatic error wrapping.
+//!     category := C.GoString(C.extractous_error_category(resultCode))
 //!
-//! - `ERR_OK` (0) → Success
-//! - Negative values → Error conditions
+//!     // Get the simple message for the error string.
+//!     msgCStr := C.extractous_error_message(resultCode)
+//!     defer C.extractous_string_free(msgCStr)
+//!     message := C.GoString(msgCStr)
 //!
-//! | Code | Meaning                          |
-//! |------|----------------------------------|
-//! |  0   | Operation successful             |
-//! | -1   | Null pointer provided            |
-//! | -2   | Invalid UTF-8 string             |
-//! | -3   | String conversion/allocation failed |
-//! | -4   | Document extraction failed       |
-//! | -5   | File system or network I/O error |
-//! | -6   | Invalid configuration value      |
-//! | -7   | Invalid enumeration value        |
-//! | -8   | Unsupported file format          |
-//! | -9   | Memory allocation failed         |
-//! | -10  | OCR operation failed             |
+//!     var baseError error
+//!     switch category {
+//!     case "io_error": baseError = ErrIO
+//!     default: baseError = ErrUnknown
+//!     }
 //!
-//! ### Usage Pattern
+//!     // Optionally log the full debug info for developers.
+//!     if C.extractous_error_has_debug() != 0 {
+//!         debugCStr := C.extractous_error_get_last_debug()
+//!         defer C.extractous_string_free(debugCStr)
+//!         log.Printf("Full debug details: %s", C.GoString(debugCStr))
+//!     }
 //!
-//! ```c
-//! int result = extractous_extractor_extract_file_to_string(
-//!     extractor, path, &content, &metadata
-//! );
-//!
-//! if (result != ERR_OK) {
-//!     char* error_msg = extractous_error_message(result);
-//!     fprintf(stderr, "Extraction failed: %s\n", error_msg);
-//!     extractous_string_free(error_msg);
-//!     return result;
+//!     return fmt.Errorf("%w: %s", baseError, message)
 //! }
 //! ```
-//!
-//! - Returned strings from `extractous_error_message()` must be freed with
-//!   `extractous_string_free()`
-//! - Do not modify the returned string
-//! - Error codes are stable and can be used for programmatic handling
-//!
-//! ## Version Information
-//!
-//! FFI Version: 0.1.0  
-//! Extractous Core Version: 0.3.0
-//!
-//! ## Platform Support
-//!
-//! - Linux (x86_64, aarch64)  
-//! - macOS (x86_64, aarch64)  
-//! - Windows (x86_64)
-//!
-//! ## License
-//!
-//! Apache License 2.0
-
-#![deny(missing_docs)]
 #![warn(clippy::all)]
-#![allow(clippy::missing_safety_doc)] // Safety docs are in function comments
+#![allow(clippy::missing_safety_doc)]
 
-// Re-export Extractous core library under a consistent alias
+// Re-export the core library under a consistent, private alias.
 pub use extractous as ecore;
 
-// Module declarations
+// Module declarations.
 mod config;
 mod errors;
 mod extractor;
@@ -146,7 +119,7 @@ mod metadata;
 mod stream;
 mod types;
 
-// Public re-exports for C header generation
+// Publicly re-export all FFI-safe functions and types for C header generation.
 pub use config::*;
 pub use errors::*;
 pub use extractor::*;
@@ -154,14 +127,19 @@ pub use metadata::*;
 pub use stream::*;
 pub use types::*;
 
-/// Returns the FFI wrapper version in semver format.
+/// Returns the FFI wrapper version as a null-terminated UTF-8 string.
+/// The returned pointer is to a static string and must not be freed.
 #[unsafe(no_mangle)]
 pub extern "C" fn extractous_ffi_version() -> *const libc::c_char {
-    concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const libc::c_char
+    // Use a static byte array with a null terminator for guaranteed memory safety.
+    static VERSION: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes();
+    VERSION.as_ptr() as *const libc::c_char
 }
 
 /// Returns the underlying Extractous core library version.
+/// The returned pointer is to a static string and must not be freed.
 #[unsafe(no_mangle)]
 pub extern "C" fn extractous_core_version() -> *const libc::c_char {
-    concat!("0.3.0", "\0").as_ptr() as *const libc::c_char
+    static VERSION: &[u8] = b"0.3.0\0";
+    VERSION.as_ptr() as *const libc::c_char
 }

@@ -160,11 +160,8 @@ func New() *Extractor {
 //
 // Returns nil if the configuration failed.
 func (e *Extractor) SetExtractStringMaxLength(maxLen int) *Extractor {
-	newPtr := C.extractous_extractor_set_extract_string_max_length(e.ptr, C.int(maxLen))
-	if newPtr == nil {
-		return nil
-	}
-	e.ptr = newPtr
+	C.extractous_extractor_set_extract_string_max_length_mut(e.ptr, C.int(maxLen))
+
 	return e
 }
 
@@ -187,11 +184,8 @@ func (e *Extractor) SetExtractStringMaxLength(maxLen int) *Extractor {
 //
 // Returns nil if the encoding is invalid.
 func (e *Extractor) SetEncoding(charset CharSet) *Extractor {
-	newPtr := C.extractous_extractor_set_encoding(e.ptr, C.int(charset))
-	if newPtr == nil {
-		return nil
-	}
-	e.ptr = newPtr
+	C.extractous_extractor_set_encoding_mut(e.ptr, C.int(charset))
+
 	return e
 }
 
@@ -219,11 +213,8 @@ func (e *Extractor) SetPdfConfig(config *PdfConfig) *Extractor {
 	if config == nil || config.ptr == nil {
 		return nil
 	}
-	newPtr := C.extractous_extractor_set_pdf_config(e.ptr, config.ptr)
-	if newPtr == nil {
-		return nil
-	}
-	e.ptr = newPtr
+	C.extractous_extractor_set_pdf_config_mut(e.ptr, config.ptr)
+
 	return e
 }
 
@@ -250,11 +241,8 @@ func (e *Extractor) SetOfficeConfig(config *OfficeConfig) *Extractor {
 	if config == nil || config.ptr == nil {
 		return nil
 	}
-	newPtr := C.extractous_extractor_set_office_config(e.ptr, config.ptr)
-	if newPtr == nil {
-		return nil
-	}
-	e.ptr = newPtr
+	C.extractous_extractor_set_office_config_mut(e.ptr, config.ptr)
+
 	return e
 }
 
@@ -289,11 +277,7 @@ func (e *Extractor) SetOcrConfig(config *OcrConfig) *Extractor {
 	if config == nil || config.ptr == nil {
 		return nil
 	}
-	newPtr := C.extractous_extractor_set_ocr_config(e.ptr, config.ptr)
-	if newPtr == nil {
-		return nil
-	}
-	e.ptr = newPtr
+	C.extractous_extractor_set_ocr_config_mut(e.ptr, config.ptr)
 	return e
 }
 
@@ -316,11 +300,7 @@ func (e *Extractor) SetXmlOutput(xmlOutput bool) *Extractor {
 	if e == nil || e.ptr == nil {
 		return nil
 	}
-	newPtr := C.extractous_extractor_set_xml_output(e.ptr, C.bool(xmlOutput))
-	if newPtr == nil {
-		return nil
-	}
-	e.ptr = newPtr
+	C.extractous_extractor_set_xml_output_mut(e.ptr, C.bool(xmlOutput))
 	return e
 }
 

@@ -30,10 +30,7 @@ fn main() {
 
 fn generate_header(crate_dir: &str) {
     let root_dir = PathBuf::from(crate_dir).parent().unwrap().to_path_buf();
-    let include_dir = root_dir.join("include");
-    fs::create_dir_all(&include_dir).expect("Failed to create include directory");
-
-    let header_path = include_dir.join("extractous.h");
+    let header_path = root_dir.join("extractous.h");
 
     match cbindgen::Builder::new()
         .with_crate(crate_dir)
@@ -70,7 +67,7 @@ fn configure_rpath(target: &str) {
     }
 }
 
-fn setup_extractous_libs(target: &str, profile: &str) {
+fn setup_extractous_libs(_target: &str, _profile: &str) {
     // The extractous crate builds libtika_native via its build.rs
     // We need to ensure those libraries are found during linking
     

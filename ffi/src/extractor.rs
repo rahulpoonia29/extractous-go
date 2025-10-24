@@ -1,7 +1,3 @@
-//! Extractor FFI functions
-//!
-//! This module provides the main extraction interface.
-
 use crate::ecore::{CharSet, Extractor as CoreExtractor};
 use crate::errors::*;
 use crate::metadata::metadata_to_c;
@@ -10,27 +6,16 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
 
-// ============================================================================
-// Extractor Lifecycle
-// ============================================================================
-
-/// Create a new Extractor with default configuration
-///
-/// ### Returns
-/// Pointer to new Extractor, or NULL on failure.
-/// Must be freed with `extractous_extractor_free`.
+/// Creates a new `Extractor` with a default configuration.
+/// The returned handle must be freed with `extractous_extractor_free`.
+// #[must_use]
 #[unsafe(no_mangle)]
 pub extern "C" fn extractous_extractor_new() -> *mut CExtractor {
     let extractor = Box::new(CoreExtractor::new());
     Box::into_raw(extractor) as *mut CExtractor
 }
 
-/// Free an Extractor instance
-///
-/// ### Safety
-/// - `handle` must be a valid pointer returned by `extractous_extractor_new`
-/// - `handle` must not be used after this call
-/// - Calling this twice on the same pointer causes undefined behavior
+/// Frees the memory associated with an `Extractor` handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_free(handle: *mut CExtractor) {
     if !handle.is_null() {
@@ -40,167 +25,140 @@ pub unsafe extern "C" fn extractous_extractor_free(handle: *mut CExtractor) {
     }
 }
 
-// ============================================================================
-// Extractor Configuration (Builder Pattern)
-// ============================================================================
+/// A macro to safely update an Extractor instance behind a raw pointer.
+macro_rules! update_extractor {
+    ($handle:expr, |$extractor_val:ident| $body:block) => {
+        if $handle.is_null() {
+            return;
+        }
+        unsafe {
+            let extractor_ptr = $handle as *mut CoreExtractor;
+            let old_extractor = ptr::read(extractor_ptr);
+            let new_extractor = {
+                let $extractor_val = old_extractor;
+                $body
+            };
+            ptr::write(extractor_ptr, new_extractor);
+        }
+    };
+}
 
-/// Set maximum length for extracted string content
-///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - Returns a NEW handle; old handle is consumed and must not be used
-///
-/// ### Returns
-/// New Extractor handle with updated config, or NULL on error.
+/// Sets the maximum length for extracted string content.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn extractous_extractor_set_extract_string_max_length(
+pub unsafe extern "C" fn extractous_extractor_set_extract_string_max_length_mut(
     handle: *mut CExtractor,
     max_length: libc::c_int,
-) -> *mut CExtractor {
-    if handle.is_null() {
-        return ptr::null_mut();
-    }
-
-    unsafe {
-        let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
-        let new_extractor = old_extractor.set_extract_string_max_length(max_length as i32);
-        Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
-    }
+) {
+    update_extractor!(handle, |extractor| {
+        extractor.set_extract_string_max_length(max_length as i32)
+    });
 }
 
-/// Set character encoding for extraction
-///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - `encoding` must be a valid CHARSET_* constant
-/// - Returns a NEW handle; old handle is consumed
-///
-/// ### Returns
-/// New Extractor handle, or NULL if encoding is invalid.
+/// Sets the character encoding for the extracted text.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn extractous_extractor_set_encoding(
+pub unsafe extern "C" fn extractous_extractor_set_encoding_mut(
     handle: *mut CExtractor,
     encoding: libc::c_int,
-) -> *mut CExtractor {
-    if handle.is_null() {
-        return ptr::null_mut();
-    }
-
-    let charset = match encoding {
-        CHARSET_UTF_8 => CharSet::UTF_8,
-        CHARSET_US_ASCII => CharSet::US_ASCII,
-        CHARSET_UTF_16BE => CharSet::UTF_16BE,
-        _ => return ptr::null_mut(),
-    };
-
-    unsafe {
-        let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
-        let new_extractor = old_extractor.set_encoding(charset);
-        Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
-    }
+) {
+    update_extractor!(handle, |extractor| {
+        let charset = match encoding {
+            CHARSET_UTF_8 => CharSet::UTF_8,
+            CHARSET_US_ASCII => CharSet::US_ASCII,
+            CHARSET_UTF_16BE => CharSet::UTF_16BE,
+            _ => return,
+        };
+        extractor.set_encoding(charset)
+    });
 }
 
-/// Set PDF parser configuration
-///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - `config` must be a valid PdfParserConfig pointer
-/// - Returns a NEW handle; old handle is consumed
+/// Sets the configuration for the PDF parser.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn extractous_extractor_set_pdf_config(
+pub unsafe extern "C" fn extractous_extractor_set_pdf_config_mut(
     handle: *mut CExtractor,
-    config: *mut CPdfParserConfig,
-) -> *mut CExtractor {
-    if handle.is_null() || config.is_null() {
-        return ptr::null_mut();
+    config: *const CPdfParserConfig,
+) {
+    if config.is_null() {
+        return;
     }
-
-    unsafe {
-        let pdf_config = &*(config as *mut crate::ecore::PdfParserConfig);
-        let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
-        let new_extractor = old_extractor.set_pdf_config(pdf_config.clone());
-        Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
-    }
+    update_extractor!(handle, |extractor| {
+        let pdf_config = &*(config as *const crate::ecore::PdfParserConfig);
+        extractor.set_pdf_config(pdf_config.clone())
+    });
 }
 
-/// Set Office parser configuration
-///
-/// ### Safety
-/// Same safety requirements as `extractous_extractor_set_pdf_config`.
+/// Sets the configuration for the Office document parser.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn extractous_extractor_set_office_config(
+pub unsafe extern "C" fn extractous_extractor_set_office_config_mut(
     handle: *mut CExtractor,
-    config: *mut COfficeParserConfig,
-) -> *mut CExtractor {
-    if handle.is_null() || config.is_null() {
-        return ptr::null_mut();
+    config: *const COfficeParserConfig,
+) {
+    if config.is_null() {
+        return;
     }
-
-    unsafe {
-        let office_config = &*(config as *mut crate::ecore::OfficeParserConfig);
-        let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
-        let new_extractor = old_extractor.set_office_config(office_config.clone());
-        Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
-    }
+    update_extractor!(handle, |extractor| {
+        let office_config = &*(config as *const crate::ecore::OfficeParserConfig);
+        extractor.set_office_config(office_config.clone())
+    });
 }
 
-/// Set OCR configuration
-///
-/// ### Safety
-/// Same safety requirements as `extractous_extractor_set_pdf_config`.
+/// Sets the configuration for Tesseract OCR.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn extractous_extractor_set_ocr_config(
+pub unsafe extern "C" fn extractous_extractor_set_ocr_config_mut(
     handle: *mut CExtractor,
-    config: *mut CTesseractOcrConfig,
-) -> *mut CExtractor {
-    if handle.is_null() || config.is_null() {
-        return ptr::null_mut();
+    config: *const CTesseractOcrConfig,
+) {
+    if config.is_null() {
+        return;
     }
-
-    unsafe {
-        let ocr_config = &*(config as *mut crate::ecore::TesseractOcrConfig);
-        let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
-        let new_extractor = old_extractor.set_ocr_config(ocr_config.clone());
-        Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
-    }
+    update_extractor!(handle, |extractor| {
+        let ocr_config = &*(config as *const crate::ecore::TesseractOcrConfig);
+        extractor.set_ocr_config(ocr_config.clone())
+    });
 }
 
-/// Set whether to output XML structure
-///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - Returns a NEW handle; old handle is consumed
+/// Sets whether to output structured XML instead of plain text.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn extractous_extractor_set_xml_output(
+pub unsafe extern "C" fn extractous_extractor_set_xml_output_mut(
     handle: *mut CExtractor,
     xml_output: bool,
-) -> *mut CExtractor {
-    if handle.is_null() {
-        return ptr::null_mut();
-    }
-
-    unsafe {
-        let old_extractor = Box::from_raw(handle as *mut CoreExtractor);
-        let new_extractor = old_extractor.set_xml_output(xml_output);
-        Box::into_raw(Box::new(new_extractor)) as *mut CExtractor
-    }
+) {
+    update_extractor!(handle, |extractor| { extractor.set_xml_output(xml_output) });
 }
 
-// ============================================================================
-// Extraction Functions
-// ============================================================================
+// Macro to handle the common extraction logic and error wrapping.
+macro_rules! perform_extraction {
+    (
+        $handle:expr,
+        $out_ptr1:expr,
+        $out_ptr2:expr,
+        $extractor_call:expr,
+        $success_handler:expr
+    ) => {{
+        if $handle.is_null() || $out_ptr1.is_null() || $out_ptr2.is_null() {
+            return ERR_NULL_POINTER;
+        }
 
-/// Extract file content to string
+        // Safely get a shared reference to the extractor.
+        let extractor = unsafe { &*($handle as *const CoreExtractor) };
+
+        match $extractor_call(extractor) {
+            Ok((res1, res2)) => {
+                $success_handler($out_ptr1, $out_ptr2, res1, res2);
+                ERR_OK
+            }
+            Err(e) => {
+                let code = extractous_error_to_code(&e);
+                set_last_error(e);
+                code
+            }
+        }
+    }};
+}
+
+/// Extracts content and metadata from a local file path into a string.
 ///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - `path` must be a valid null-terminated UTF-8 string
-/// - `out_content` and `out_metadata` must be valid pointers
-/// - Caller must free returned content with `extractous_string_free`
-/// - Caller must free returned metadata with `extractous_metadata_free`
-///
-/// ### Returns
-/// ERR_OK on success, error code on failure.
+/// Output strings must be freed with `extractous_string_free`.
+/// Output metadata must be freed with `extractous_metadata_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
     handle: *mut CExtractor,
@@ -208,55 +166,29 @@ pub unsafe extern "C" fn extractous_extractor_extract_file_to_string(
     out_content: *mut *mut c_char,
     out_metadata: *mut *mut CMetadata,
 ) -> libc::c_int {
-    // Null pointer checks
-    if handle.is_null() || path.is_null() || out_content.is_null() || out_metadata.is_null() {
+    if path.is_null() {
         return ERR_NULL_POINTER;
     }
+    let path_str = match unsafe { CStr::from_ptr(path).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ERR_INVALID_UTF8,
+    };
 
-    unsafe {
-        // Convert C string to Rust str
-        let path_str = match CStr::from_ptr(path).to_str() {
-            Ok(s) => s,
-            Err(_) => return ERR_INVALID_UTF8,
-        };
-
-        // Get reference to extractor
-        let extractor = &*(handle as *mut CoreExtractor);
-
-        // Perform extraction
-        match extractor.extract_file_to_string(path_str) {
-            Ok((content, metadata)) => {
-                // Convert content to C string
-                *out_content = match CString::new(content) {
-                    Ok(s) => s.into_raw(),
-                    Err(_) => return ERR_INVALID_STRING,
-                };
-
-                // Convert metadata to C structure
-                *out_metadata = metadata_to_c(metadata);
-
-                ERR_OK
-            }
-            Err(e) => {
-                let code = extractous_error_to_code(&e);
-                set_last_error(e);
-                code
+    perform_extraction!(
+        handle,
+        out_content,
+        out_metadata,
+        |extractor: &CoreExtractor| extractor.extract_file_to_string(path_str),
+        |out_c: *mut *mut c_char, out_m: *mut *mut CMetadata, content, metadata| {
+            unsafe {
+                *out_c = CString::new(content).map_or(ptr::null_mut(), |s| s.into_raw());
+                *out_m = metadata_to_c(metadata);
             }
         }
-    }
+    )
 }
 
-/// Extract file content to stream
-///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - `path` must be a valid null-terminated UTF-8 string
-/// - `out_reader` and `out_metadata` must be valid pointers
-/// - Caller must free returned reader with `extractous_stream_free`
-/// - Caller must free returned metadata with `extractous_metadata_free`
-///
-/// ### Returns
-/// ERR_OK on success, error code on failure.
+/// Extracts content and metadata from a local file path into a stream.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_file(
     handle: *mut CExtractor,
@@ -264,42 +196,29 @@ pub unsafe extern "C" fn extractous_extractor_extract_file(
     out_reader: *mut *mut CStreamReader,
     out_metadata: *mut *mut CMetadata,
 ) -> libc::c_int {
-    if handle.is_null() || path.is_null() || out_reader.is_null() || out_metadata.is_null() {
+    if path.is_null() {
         return ERR_NULL_POINTER;
     }
+    let path_str = match unsafe { CStr::from_ptr(path).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ERR_INVALID_UTF8,
+    };
 
-    unsafe {
-        let path_str = match CStr::from_ptr(path).to_str() {
-            Ok(s) => s,
-            Err(_) => return ERR_INVALID_UTF8,
-        };
-
-        let extractor = &*(handle as *mut CoreExtractor);
-
-        match extractor.extract_file(path_str) {
-            Ok((reader, metadata)) => {
-                *out_reader = Box::into_raw(Box::new(reader)) as *mut CStreamReader;
-                *out_metadata = metadata_to_c(metadata);
-                ERR_OK
-            }
-            Err(e) => {
-                let code = extractous_error_to_code(&e);
-                set_last_error(e);
-                code
+    perform_extraction!(
+        handle,
+        out_reader,
+        out_metadata,
+        |extractor: &CoreExtractor| extractor.extract_file(path_str),
+        |out_r: *mut *mut CStreamReader, out_m: *mut *mut CMetadata, reader, metadata| {
+            unsafe {
+                *out_r = Box::into_raw(Box::new(reader)) as *mut CStreamReader;
+                *out_m = metadata_to_c(metadata);
             }
         }
-    }
+    )
 }
 
-/// Extract from byte array to string
-///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - `data` must point to at least `data_len` valid bytes
-/// - `out_content` and `out_metadata` must be valid pointers
-///
-/// ### Returns
-/// ERR_OK on success, error code on failure.
+/// Extracts content and metadata from a byte slice into a string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
     handle: *mut CExtractor,
@@ -308,42 +227,26 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes_to_string(
     out_content: *mut *mut c_char,
     out_metadata: *mut *mut CMetadata,
 ) -> libc::c_int {
-    if handle.is_null() || data.is_null() || out_content.is_null() || out_metadata.is_null() {
+    if data.is_null() {
         return ERR_NULL_POINTER;
     }
+    let bytes = unsafe { std::slice::from_raw_parts(data, data_len) };
 
-    unsafe {
-        let bytes = std::slice::from_raw_parts(data, data_len);
-        let extractor = &*(handle as *mut CoreExtractor);
-
-        match extractor.extract_bytes_to_string(bytes) {
-            Ok((content, metadata)) => {
-                *out_content = match CString::new(content) {
-                    Ok(s) => s.into_raw(),
-                    Err(_) => return ERR_INVALID_STRING,
-                };
-
-                *out_metadata = metadata_to_c(metadata);
-                ERR_OK
-            }
-            Err(e) => {
-                let code = extractous_error_to_code(&e);
-                set_last_error(e);
-                code
+    perform_extraction!(
+        handle,
+        out_content,
+        out_metadata,
+        |extractor: &CoreExtractor| extractor.extract_bytes_to_string(bytes),
+        |out_c: *mut *mut c_char, out_m: *mut *mut CMetadata, content, metadata| {
+            unsafe {
+                *out_c = CString::new(content).map_or(ptr::null_mut(), |s| s.into_raw());
+                *out_m = metadata_to_c(metadata);
             }
         }
-    }
+    )
 }
 
-/// Extract from byte array to stream
-///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - `data` must point to at least `data_len` valid bytes
-/// - `out_reader` and `out_metadata` must be valid pointers
-///
-/// ### Returns
-/// ERR_OK on success, error code on failure.
+/// Extracts content and metadata from a byte slice into a stream.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_bytes(
     handle: *mut CExtractor,
@@ -352,63 +255,26 @@ pub unsafe extern "C" fn extractous_extractor_extract_bytes(
     out_reader: *mut *mut CStreamReader,
     out_metadata: *mut *mut CMetadata,
 ) -> libc::c_int {
-    if handle.is_null() || data.is_null() || out_reader.is_null() || out_metadata.is_null() {
+    if data.is_null() {
         return ERR_NULL_POINTER;
     }
+    let bytes = unsafe { std::slice::from_raw_parts(data, data_len) };
 
-    unsafe {
-        let bytes = std::slice::from_raw_parts(data, data_len);
-        let extractor = &*(handle as *mut CoreExtractor);
-
-        match extractor.extract_bytes(bytes) {
-            Ok((reader, metadata)) => {
-                *out_reader = Box::into_raw(Box::new(reader)) as *mut CStreamReader;
-                *out_metadata = metadata_to_c(metadata);
-                ERR_OK
-            }
-            Err(e) => {
-                let code = extractous_error_to_code(&e);
-                set_last_error(e);
-                code
+    perform_extraction!(
+        handle,
+        out_reader,
+        out_metadata,
+        |extractor: &CoreExtractor| extractor.extract_bytes(bytes),
+        |out_r: *mut *mut CStreamReader, out_m: *mut *mut CMetadata, reader, metadata| {
+            unsafe {
+                *out_r = Box::into_raw(Box::new(reader)) as *mut CStreamReader;
+                *out_m = metadata_to_c(metadata);
             }
         }
-    }
+    )
 }
 
-// ============================================================================
-// String Memory Management
-// ============================================================================
-
-/// Free a string allocated by Rust
-///
-/// ### Safety
-/// - `s` must be a pointer returned by an extractous function
-/// - `s` must not be used after this call
-/// - Calling this twice on the same pointer causes undefined behavior
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn extractous_string_free(s: *mut c_char) {
-    if !s.is_null() {
-        unsafe {
-            drop(CString::from_raw(s));
-        }
-    }
-}
-
-// ============================================================================
-// URL Extraction Functions
-// ============================================================================
-
-/// Extract URL content to string
-///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - `url` must be a valid null-terminated UTF-8 string
-/// - `out_content` and `out_metadata` must be valid pointers
-/// - Caller must free returned content with `extractous_string_free`
-/// - Caller must free returned metadata with `extractous_metadata_free`
-///
-/// ### Returns
-/// ERR_OK on success, error code on failure.
+/// Extracts content and metadata from a URL into a string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_url_to_string(
     handle: *mut CExtractor,
@@ -416,55 +282,29 @@ pub unsafe extern "C" fn extractous_extractor_extract_url_to_string(
     out_content: *mut *mut c_char,
     out_metadata: *mut *mut CMetadata,
 ) -> libc::c_int {
-    // Null pointer checks
-    if handle.is_null() || url.is_null() || out_content.is_null() || out_metadata.is_null() {
+    if url.is_null() {
         return ERR_NULL_POINTER;
     }
+    let url_str = match unsafe { CStr::from_ptr(url).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ERR_INVALID_UTF8,
+    };
 
-    unsafe {
-        // Convert C string to Rust str
-        let url_str = match CStr::from_ptr(url).to_str() {
-            Ok(s) => s,
-            Err(_) => return ERR_INVALID_UTF8,
-        };
-
-        // Get reference to extractor
-        let extractor = &*(handle as *mut CoreExtractor);
-
-        // Perform extraction
-        match extractor.extract_url_to_string(url_str) {
-            Ok((content, metadata)) => {
-                // Convert content to C string
-                *out_content = match CString::new(content) {
-                    Ok(s) => s.into_raw(),
-                    Err(_) => return ERR_INVALID_STRING,
-                };
-
-                // Convert metadata to C structure
-                *out_metadata = metadata_to_c(metadata);
-
-                ERR_OK
-            }
-            Err(e) => {
-                let code = extractous_error_to_code(&e);
-                set_last_error(e);
-                code
+    perform_extraction!(
+        handle,
+        out_content,
+        out_metadata,
+        |extractor: &CoreExtractor| extractor.extract_url_to_string(url_str),
+        |out_c: *mut *mut c_char, out_m: *mut *mut CMetadata, content, metadata| {
+            unsafe {
+                *out_c = CString::new(content).map_or(ptr::null_mut(), |s| s.into_raw());
+                *out_m = metadata_to_c(metadata);
             }
         }
-    }
+    )
 }
 
-/// Extract URL content to stream
-///
-/// ### Safety
-/// - `handle` must be a valid Extractor pointer
-/// - `url` must be a valid null-terminated UTF-8 string
-/// - `out_reader` and `out_metadata` must be valid pointers
-/// - Caller must free returned reader with `extractous_stream_free`
-/// - Caller must free returned metadata with `extractous_metadata_free`
-///
-/// ### Returns
-/// ERR_OK on success, error code on failure.
+/// Extracts content and metadata from a URL into a stream.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_extractor_extract_url(
     handle: *mut CExtractor,
@@ -472,29 +312,32 @@ pub unsafe extern "C" fn extractous_extractor_extract_url(
     out_reader: *mut *mut CStreamReader,
     out_metadata: *mut *mut CMetadata,
 ) -> libc::c_int {
-    if handle.is_null() || url.is_null() || out_reader.is_null() || out_metadata.is_null() {
+    if url.is_null() {
         return ERR_NULL_POINTER;
     }
+    let url_str = match unsafe { CStr::from_ptr(url).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ERR_INVALID_UTF8,
+    };
 
-    unsafe {
-        let url_str = match CStr::from_ptr(url).to_str() {
-            Ok(s) => s,
-            Err(_) => return ERR_INVALID_UTF8,
-        };
-
-        let extractor = &*(handle as *mut CoreExtractor);
-
-        match extractor.extract_url(url_str) {
-            Ok((reader, metadata)) => {
-                *out_reader = Box::into_raw(Box::new(reader)) as *mut CStreamReader;
-                *out_metadata = metadata_to_c(metadata);
-                ERR_OK
-            }
-            Err(e) => {
-                let code = extractous_error_to_code(&e);
-                set_last_error(e);
-                code
+    perform_extraction!(
+        handle,
+        out_reader,
+        out_metadata,
+        |extractor: &CoreExtractor| extractor.extract_url(url_str),
+        |out_r: *mut *mut CStreamReader, out_m: *mut *mut CMetadata, reader, metadata| {
+            unsafe {
+                *out_r = Box::into_raw(Box::new(reader)) as *mut CStreamReader;
+                *out_m = metadata_to_c(metadata);
             }
         }
+    )
+}
+
+/// Frees a C-style string that was allocated by this library.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn extractous_string_free(s: *mut c_char) {
+    if !s.is_null() {
+        drop(unsafe { CString::from_raw(s) });
     }
 }
