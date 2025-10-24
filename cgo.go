@@ -7,27 +7,24 @@ package extractous
 
 /*
 // Linux
-// #cgo linux,amd64 CFLAGS: -I${SRCDIR}
-// #cgo linux,amd64 LDFLAGS: -lextractous_ffi -ldl -lm -lpthread
-// #cgo linux,arm64 CFLAGS: -I${SRCDIR}
-// #cgo linux,arm64 LDFLAGS: -lextractous_ffi -ldl -lm -lpthread
+#cgo linux,amd64 CFLAGS: -I${SRCDIR}
+#cgo linux,amd64 LDFLAGS: -lextractous_ffi -ldl -lm -lpthread
+#cgo linux,arm64 CFLAGS: -I${SRCDIR}
+#cgo linux,arm64 LDFLAGS: -lextractous_ffi -ldl -lm -lpthread
 
-// // macOS
-// #cgo darwin,amd64 CFLAGS: -I${SRCDIR}
-// #cgo darwin,amd64 LDFLAGS: -lextractous_ffi -ldl -lm -lpthread
-// #cgo darwin,arm64 CFLAGS: -I${SRCDIR}
-// #cgo darwin,arm64 LDFLAGS: -lextractous_ffi -ldl -lm -lpthread
+// macOS
+#cgo darwin,amd64 CFLAGS: -I${SRCDIR}
+#cgo darwin,amd64 LDFLAGS: -lextractous_ffi -ldl -lm -lpthread
+#cgo darwin,arm64 CFLAGS: -I${SRCDIR}
+#cgo darwin,arm64 LDFLAGS: -lextractous_ffi -ldl -lm -lpthread
 
-// // Windows
-// #cgo windows,amd64 CFLAGS: -I${SRCDIR}
-// #cgo windows,amd64 LDFLAGS: -lextractous_ffi
+// Windows
+#cgo windows,amd64 CFLAGS: -I${SRCDIR}
+#cgo windows,amd64 LDFLAGS: -lextractous_ffi
 
 
 // Include the generated header
-// #include "extractous.h"
-*/
-/*
-#include <stdlib.h>
+#include "extractous.h"
 */
 import "C"
 import (
