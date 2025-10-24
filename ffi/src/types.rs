@@ -3,27 +3,22 @@ use std::os::raw::{c_char, c_int};
 #[repr(C)]
 pub struct CExtractor {
     _private: [u8; 0],
-    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
 #[repr(C)]
 pub struct CStreamReader {
     _private: [u8; 0],
-    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
 #[repr(C)]
 pub struct CPdfParserConfig {
     _private: [u8; 0],
-    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
 #[repr(C)]
 pub struct COfficeParserConfig {
     _private: [u8; 0],
-    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
 #[repr(C)]
 pub struct CTesseractOcrConfig {
     _private: [u8; 0],
-    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
 
 #[repr(C)]

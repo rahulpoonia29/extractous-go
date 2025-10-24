@@ -72,6 +72,7 @@ func NewPdfConfig() *PdfConfig {
 	ptr := C.extractous_pdf_config_new()
 	if ptr == nil {
 		return nil
+		
 	}
 
 	cfg := &PdfConfig{ptr: ptr}

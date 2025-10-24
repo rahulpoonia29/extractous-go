@@ -92,7 +92,7 @@ pub unsafe extern "C" fn extractous_stream_read_exact(
 }
 
 /// Reads the remaining stream into a newly allocated buffer.
-#[must_use]
+// #[must_use]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn extractous_stream_read_all(
     handle: *mut CStreamReader,

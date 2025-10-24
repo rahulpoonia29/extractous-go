@@ -28,7 +28,7 @@ macro_rules! update_config {
 /// Creates a new PDF parser configuration with default settings.
 /// The returned handle must be freed with `extractous_pdf_config_free()`
 /// unless passed to an extractor, which will take ownership.
-#[must_use]
+// #[must_use]
 #[unsafe(no_mangle)]
 pub extern "C" fn extractous_pdf_config_new() -> *mut CPdfParserConfig {
     let config = Box::new(CorePdfConfig::new());
@@ -107,7 +107,7 @@ pub unsafe extern "C" fn extractous_pdf_config_set_extract_annotation_text(
 }
 
 /// Creates a new Office parser configuration with default settings.
-#[must_use]
+// #[must_use]
 #[unsafe(no_mangle)]
 pub extern "C" fn extractous_office_config_new() -> *mut COfficeParserConfig {
     let config = Box::new(CoreOfficeConfig::new());
@@ -167,7 +167,7 @@ pub unsafe extern "C" fn extractous_office_config_set_include_shape_based_conten
 }
 
 /// Creates a new Tesseract OCR configuration with default settings.
-#[must_use]
+// #[must_use]
 #[unsafe(no_mangle)]
 pub extern "C" fn extractous_ocr_config_new() -> *mut CTesseractOcrConfig {
     let config = Box::new(CoreOcrConfig::new());

@@ -8,8 +8,8 @@ use std::ptr;
 
 /// Creates a new `Extractor` with a default configuration.
 /// The returned handle must be freed with `extractous_extractor_free`.
+// #[must_use]
 #[unsafe(no_mangle)]
-#[must_use]
 pub extern "C" fn extractous_extractor_new() -> *mut CExtractor {
     let extractor = Box::new(CoreExtractor::new());
     Box::into_raw(extractor) as *mut CExtractor

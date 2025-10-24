@@ -119,7 +119,7 @@ const char *extractous_core_version(void);
  The returned handle must be freed with `extractous_pdf_config_free()`
  unless passed to an extractor, which will take ownership.
  */
-auto struct CPdfParserConfig *extractous_pdf_config_new(void);
+struct CPdfParserConfig *extractous_pdf_config_new(void);
 
 /*
  Frees the memory associated with a PDF parser configuration.
@@ -156,7 +156,7 @@ void extractous_pdf_config_set_extract_annotation_text(struct CPdfParserConfig *
 /*
  Creates a new Office parser configuration with default settings.
  */
-auto struct COfficeParserConfig *extractous_office_config_new(void);
+struct COfficeParserConfig *extractous_office_config_new(void);
 
 /*
  Frees the memory associated with an Office parser configuration.
@@ -189,7 +189,7 @@ void extractous_office_config_set_include_shape_based_content(struct COfficePars
 /*
  Creates a new Tesseract OCR configuration with default settings.
  */
-auto struct CTesseractOcrConfig *extractous_ocr_config_new(void);
+struct CTesseractOcrConfig *extractous_ocr_config_new(void);
 
 /*
  Frees the memory associated with a Tesseract OCR configuration.
@@ -241,7 +241,7 @@ void extractous_error_clear_last(void);
  Creates a new `Extractor` with a default configuration.
  The returned handle must be freed with `extractous_extractor_free`.
  */
-auto struct CExtractor *extractous_extractor_new(void);
+struct CExtractor *extractous_extractor_new(void);
 
 /*
  Frees the memory associated with an `Extractor` handle.
@@ -370,7 +370,6 @@ int extractous_stream_read_exact(struct CStreamReader *handle,
 /*
  Reads the remaining stream into a newly allocated buffer.
  */
-auto
 int extractous_stream_read_all(struct CStreamReader *handle,
                                uint8_t **out_buffer,
                                size_t *out_size);
