@@ -3,7 +3,7 @@ package extractous_test
 import (
 	"testing"
 
-	extractous "github.com/rahulpoonia29/extractous-go/src"
+	extractous "github.com/rahulpoonia29/extractous-go"
 )
 
 // ============================================================================
@@ -340,7 +340,7 @@ func TestExtractor_ExtractBytes_NilExtractor(t *testing.T) {
 
 func TestExtractor_ExtractUrlToString_NilExtractor(t *testing.T) {
 	var extractor *extractous.Extractor
-	_, _, err := extractor.ExtractUrlToString("http://example.com")
+	_, _, err := extractor.ExtractURLToString("http://example.com")
 	if err == nil {
 		t.Error("Expected error when using nil extractor")
 	}
@@ -348,7 +348,7 @@ func TestExtractor_ExtractUrlToString_NilExtractor(t *testing.T) {
 
 func TestExtractor_ExtractUrl_NilExtractor(t *testing.T) {
 	var extractor *extractous.Extractor
-	_, _, err := extractor.ExtractUrl("http://example.com")
+	_, _, err := extractor.ExtractURL("http://example.com")
 	if err == nil {
 		t.Error("Expected error when using nil extractor")
 	}

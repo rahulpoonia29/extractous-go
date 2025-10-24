@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	extractous "github.com/rahulpoonia29/extractous-go/src"
+	extractous "github.com/rahulpoonia29/extractous-go"
 )
 
 // ============================================================================
@@ -265,7 +265,7 @@ func TestIntegration_MetadataExtraction(t *testing.T) {
 	// Test GetAll method
 	for _, key := range keys {
 		values := metadata.GetAll(key)
-		if values == nil || len(values) == 0 {
+		if len(values) == 0 {
 			t.Errorf("GetAll returned nil/empty for existing key: %s", key)
 		}
 	}
@@ -350,7 +350,7 @@ func TestIntegration_ConcurrentExtraction(t *testing.T) {
 	const numGoroutines = 10
 	errors := make(chan error, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			extractor := extractous.New()
 			if extractor == nil {

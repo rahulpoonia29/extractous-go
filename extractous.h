@@ -31,927 +31,262 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-/*
- Success - operation completed without errors
-
- This is the only non-error return value. All operations that complete
- successfully will return this code.
- */
 #define ERR_OK 0
 
-/*
- Null pointer provided as argument
-
- Returned when a required pointer argument is NULL.
- Check all pointer arguments before calling FFI functions.
-
- Common causes:
- - Forgot to allocate output parameter
- - Accidentally passed NULL instead of valid pointer
- - Double-free caused pointer to become invalid
- */
 #define ERR_NULL_POINTER -1
 
-/*
- Invalid UTF-8 string encoding
-
- Returned when a C string argument contains invalid UTF-8 sequences.
- All string arguments must be valid UTF-8.
-
- Common causes:
- - String contains binary data
- - Wrong encoding used (e.g., Latin-1 instead of UTF-8)
- - Corrupted string data
- */
 #define ERR_INVALID_UTF8 -2
 
-/*
- String conversion or allocation failed
-
- Returned when internal string operations fail, typically due to:
- - Null bytes in unexpected positions
- - Memory allocation failure
- - String contains invalid characters for the operation
- */
 #define ERR_INVALID_STRING -3
 
-/*
- Document extraction failed
-
- General extraction error when the specific cause is unknown or internal.
- The document may be:
- - Corrupted or malformed
- - Using an unsupported format variant
- - Encrypted without proper credentials
- - Too complex for the parser
- */
 #define ERR_EXTRACTION_FAILED -4
 
-/*
- File system or network I/O error
-
- Returned when file or network operations fail.
-
- Common causes:
- - File not found
- - Permission denied
- - Network timeout
- - Disk full
- - Path too long
- */
 #define ERR_IO_ERROR -5
 
-/*
- Invalid configuration value
-
- Returned when configuration parameters are invalid.
-
- Common causes:
- - Out of range values
- - Incompatible configuration combinations
- - Invalid enum constants
- */
 #define ERR_INVALID_CONFIG -6
 
-/*
- Invalid enumeration value
-
- Returned when an enum constant (like charset or OCR strategy) is invalid.
- Only use the documented constants.
- */
 #define ERR_INVALID_ENUM -7
 
-/*
- Unsupported file format
-
- The file format is not supported by extractous or the parser
- for this format is not available.
- */
 #define ERR_UNSUPPORTED_FORMAT -8
 
-/*
- Memory allocation failed
-
- Extremely rare - indicates the system is out of memory.
- */
 #define ERR_OUT_OF_MEMORY -9
 
-/*
- OCR operation failed
-
- OCR processing failed, possibly because:
- - Tesseract is not installed
- - Invalid language data
- - Image format not supported
- */
 #define ERR_OCR_FAILED -10
 
-/*
- UTF-8 encoding (default, recommended)
-
- Universal character encoding supporting all languages and emojis.
- This is the default and recommended encoding for most use cases.
- */
 #define CHARSET_UTF_8 0
 
-/*
- US-ASCII encoding
-
- 7-bit ASCII encoding. Use only if you're certain the content
- contains only basic ASCII characters (0-127).
- */
 #define CHARSET_US_ASCII 1
 
-/*
- UTF-16 Big Endian encoding
+#define CHARSET_UTF_16BE 3
 
- 16-bit Unicode encoding with big-endian byte order.
- Less common, use only if specifically required.
- */
-#define CHARSET_UTF_16BE 2
+#define PDF_OCR_STRATEGY_NO_OCR 0
 
-/*
- No OCR processing - extract only embedded text
+#define PDF_OCR_STRATEGY_OCR_ONLY 1
 
- Fastest option. Extracts only text that is already present in the PDF.
- Images and scanned pages will not be processed.
+#define PDF_OCR_STRATEGY_OCR_AND_TEXT_EXTRACTION 2
 
- Use when:
- - PDF contains searchable text
- - OCR is not needed
- - Performance is critical
- */
-#define PDF_OCR_NO_OCR 0
+#define PDF_OCR_STRATEGY_AUTO 3
 
-/*
- OCR only - ignore embedded text
-
- Renders pages as images and performs OCR.
- Ignores any embedded text in the PDF.
-
- Use when:
- - PDF text layer is corrupted or unreliable
- - You need consistent OCR processing
- */
-#define PDF_OCR_OCR_ONLY 1
-
-/*
- Combined OCR and text extraction
-
- Extracts embedded text AND performs OCR on images.
- Provides most comprehensive extraction but is slower.
-
- Use when:
- - PDF has both text and scanned images
- - Maximum content extraction is needed
- */
-#define PDF_OCR_OCR_AND_TEXT_EXTRACTION 2
-
-/*
- Automatic OCR strategy selection
-
- Analyzes the PDF and automatically decides whether to use OCR.
- Good balance between performance and coverage.
-
- Use when:
- - Processing mixed PDFs (some with text, some scanned)
- - Want automatic optimization
- */
-#define PDF_OCR_AUTO 3
-
-/*
- Default buffer size for stream reading (4KB)
-
- Recommended buffer size for efficient stream reading.
- Balances memory usage and I/O performance.
- */
-#define DEFAULT_BUFFER_SIZE 4096
-
-/*
- Maximum recommended buffer size (1MB)
-
- Large buffer for high-performance scenarios.
- Use when processing very large documents.
- */
-#define MAX_BUFFER_SIZE (1024 * 1024)
-
-/*
- Default string extraction limit (100MB)
-
- Default maximum length for extracted strings to prevent
- excessive memory usage on very large documents.
- */
-#define DEFAULT_STRING_MAX_LENGTH ((100 * 1024) * 1024)
-
-/*
- Opaque handle to a PdfParserConfig instance
-
- Configuration for PDF document parsing. Create with `extractous_pdf_config_new()`,
- configure with setter functions, and free with `extractous_pdf_config_free()`.
-
- Note: Setters consume the old handle and return a new one (builder pattern).
- */
 typedef struct CPdfParserConfig {
   uint8_t _private[0];
 } CPdfParserConfig;
 
-/*
- Opaque handle to an OfficeParserConfig instance
-
- Configuration for Microsoft Office document parsing. Create with
- `extractous_office_config_new()` and free with `extractous_office_config_free()`.
- */
 typedef struct COfficeParserConfig {
   uint8_t _private[0];
 } COfficeParserConfig;
 
-/*
- Opaque handle to a TesseractOcrConfig instance
-
- Configuration for Tesseract OCR engine. Create with `extractous_ocr_config_new()`
- and free with `extractous_ocr_config_free()`.
-
- Note: Requires Tesseract to be installed on the system.
- */
 typedef struct CTesseractOcrConfig {
   uint8_t _private[0];
 } CTesseractOcrConfig;
 
-/*
- Opaque handle to an Extractor instance
-
- Represents the main extraction engine. Create with `extractous_extractor_new()`
- and destroy with `extractous_extractor_free()`.
-
- ## Thread Safety
- Not thread-safe. Use separate instances per thread or external synchronization.
-
- ### Example
- ```c
- CExtractor* extractor = extractous_extractor_new();
- // ... use extractor ...
- extractous_extractor_free(extractor);
- ```
- */
 typedef struct CExtractor {
   uint8_t _private[0];
 } CExtractor;
 
-/*
- C-compatible metadata structure
-
- Contains document metadata as parallel arrays of keys and values.
- Multiple values for the same key are comma-separated.
-
- ### Memory Layout
- ```text
- keys[0] -> "author\0"      values[0] -> "John Doe\0"
- keys[1] -> "title\0"       values[1] -> "My Document\0"
- keys[2] -> "keywords\0"    values[2] -> "pdf,test,sample\0"
- ```
-
- ### Memory Management
- Must be freed with `extractous_metadata_free()` which will:
- 1. Free all individual key strings
- 2. Free all individual value strings
- 3. Free the key array
- 4. Free the value array
- 5. Free the structure itself
-
- ### Safety
- - All strings are valid null-terminated UTF-8
- - Arrays contain exactly `len` elements
- - Do not modify the structure directly from C
- - Do not free individual strings; use `extractous_metadata_free()`
- */
 typedef struct CMetadata {
   /*
-   Array of pointers to key strings (null-terminated UTF-8)
+   Array of pointers to null-terminated key strings
    */
   char **keys;
   /*
-   Array of pointers to value strings (null-terminated UTF-8, comma-separated if multiple)
+   Array of pointers to null-terminated value strings
    */
   char **values;
   /*
-   Number of key-value pairs in the arrays
+   The number of key-value pairs in the arrays
    */
   size_t len;
 } CMetadata;
 
-/*
- Opaque handle to a StreamReader instance
-
- Represents a buffered stream of extracted content. Read data using
- `extractous_stream_read()` and free with `extractous_stream_free()`.
-
- ### Example
- ```c
- CStreamReader* reader;
- CMetadata* metadata;
- extractous_extractor_extract_file(extractor, "doc.pdf", &reader, &metadata);
-
- char buffer[4096];
- size_t bytes_read;
- while (extractous_stream_read(reader, buffer, sizeof(buffer), &bytes_read) == ERR_OK
-        && bytes_read > 0) {
-     // Process buffer...
- }
- extractous_stream_free(reader);
- ```
- */
 typedef struct CStreamReader {
   uint8_t _private[0];
 } CStreamReader;
 
 /*
- Returns the FFI wrapper version in semver format.
+ Returns the FFI wrapper version as a null-terminated UTF-8 string.
+ The returned pointer is to a static string and must not be freed.
  */
 const char *extractous_ffi_version(void);
 
 /*
  Returns the underlying Extractous core library version.
+ The returned pointer is to a static string and must not be freed.
  */
 const char *extractous_core_version(void);
 
 /*
- Create a new PDF parser configuration with default settings
-
- ### Default configuration:
- - OCR strategy: NO_OCR (fastest, text extraction only)
- - Extract inline images: false
- - Extract unique inline images only: true
- - Extract marked content: false
- - Extract annotation text: false
-
- Returns
- Pointer to new PdfParserConfig. Must be freed with `extractous_pdf_config_free()`
- unless attached to an extractor.
-
- ```c
- CPdfParserConfig* config = extractous_pdf_config_new();
- if (config == NULL) {
-     // Handle allocation error
- }
- ```
+ Creates a new PDF parser configuration with default settings.
+ The returned handle must be freed with `extractous_pdf_config_free()`
+ unless passed to an extractor, which will take ownership.
  */
-struct CPdfParserConfig *extractous_pdf_config_new(void);
+auto struct CPdfParserConfig *extractous_pdf_config_new(void);
 
 /*
- Set the OCR strategy for PDF parsing
-
- Determines how OCR is applied to PDF documents.
-
- ##### Arguments
- * `handle` - Valid PdfParserConfig pointer
- * `strategy` - PDF_OCR_NO_OCR, PDF_OCR_OCR_ONLY, PDF_OCR_OCR_AND_TEXT_EXTRACTION, PDF_OCR_AUTO
-
- ##### Returns
- New PdfParserConfig handle with updated strategy, or NULL if invalid.
- The input handle is consumed and must not be used.
-
- ### Strategy Guide
- - `PDF_OCR_NO_OCR`: Fastest, text-based PDFs only
- - `PDF_OCR_OCR_ONLY`: Scanned documents, ignore existing text
- - `PDF_OCR_OCR_AND_TEXT_EXTRACTION`: Mixed content, thorough extraction
- - `PDF_OCR_AUTO`: Let the library decide (recommended)
-
- ##### Safety
- - Input handle is consumed; do not use after this call
- - Returns NULL if handle is NULL or strategy is invalid
- */
-struct CPdfParserConfig *extractous_pdf_config_set_ocr_strategy(struct CPdfParserConfig *handle,
-                                                                int strategy);
-
-/*
- Enable or disable extraction of inline images from PDF
-
- When enabled, extracts embedded image data from the PDF.
- Can significantly increase memory usage and processing time.
-
- ##### Arguments
- * `handle` - Valid PdfParserConfig pointer
- * `value` - true to extract inline images, false to skip
-
- ##### Returns
- New PdfParserConfig handle or NULL if handle is invalid.
-
- ### Performance Impact
- - Disabled (default): Fast, minimal memory
- - Enabled: Slower, higher memory usage
-
- ##### Safety
- Input handle is consumed; do not use after this call.
- */
-struct CPdfParserConfig *extractous_pdf_config_set_extract_inline_images(struct CPdfParserConfig *handle,
-                                                                         bool value);
-
-/*
- Extract each unique inline image only once
-
- When enabled with inline image extraction, deduplicates repeated images.
-
- ### Arguments
- * `handle` - Valid PdfParserConfig pointer
- * `value` - true for deduplication (recommended), false to extract all
-
- ### Returns
- New PdfParserConfig handle or NULL if handle is invalid.
-
- ### Safety
- Input handle is consumed.
- */
-struct CPdfParserConfig *extractous_pdf_config_set_extract_unique_inline_images_only(struct CPdfParserConfig *handle,
-                                                                                     bool value);
-
-/*
- Extract text with marked content structure
-
- Attempts to preserve document structure markers from the PDF.
-
- ### Arguments
- * `handle` - Valid PdfParserConfig pointer
- * `value` - true to extract marked content, false otherwise
-
- ### Returns
- New PdfParserConfig handle or NULL if handle is invalid.
-
- ### Safety
- Input handle is consumed.
- */
-struct CPdfParserConfig *extractous_pdf_config_set_extract_marked_content(struct CPdfParserConfig *handle,
-                                                                          bool value);
-
-/*
- Extract text from PDF annotations
-
- Includes comments, highlights, and other annotation content.
-
- ### Arguments
- * `handle` - Valid PdfParserConfig pointer
- * `value` - true to extract annotations, false to skip
-
- ### Returns
- New PdfParserConfig handle or NULL if handle is invalid.
-
- ### Safety
- Input handle is consumed.
- */
-struct CPdfParserConfig *extractous_pdf_config_set_extract_annotation_text(struct CPdfParserConfig *handle,
-                                                                           bool value);
-
-/*
- Free PDF parser configuration
-
- ### Safety
- - `handle` must be a valid PdfParserConfig pointer
- - `handle` must not be used after this call
- - Do not call this if config was attached to an extractor (it will be freed automatically)
-
- ### Example
- ```c
- CPdfParserConfig* config = extractous_pdf_config_new();
- // Use config...
- extractous_pdf_config_free(config);  // Only if not attached to extractor
- ```
+ Frees the memory associated with a PDF parser configuration.
+ Do not call this if the config has been attached to an extractor.
  */
 void extractous_pdf_config_free(struct CPdfParserConfig *handle);
 
 /*
- Create a new Office parser configuration with default settings
-
- Default configuration:
- - Extract macros: false
- - Include deleted content: false
- - Include move-from content: false
- - Include shape-based content: true
-
- ### Returns
- Pointer to new OfficeParserConfig. Must be freed with `extractous_office_config_free()`
- unless attached to an extractor.
+ Sets the OCR strategy for PDF parsing. Modifies the config in-place.
  */
-struct COfficeParserConfig *extractous_office_config_new(void);
+void extractous_pdf_config_set_ocr_strategy(struct CPdfParserConfig *handle, int strategy);
 
 /*
- Enable or disable macro extraction from Office documents
-
- **Security Warning**: Macros can contain malicious code. Only enable this
- if you trust the document source and need macro content.
-
- ### Arguments
- * `handle` - Valid OfficeParserConfig pointer
- * `value` - true to extract macros (security risk), false to skip (safer)
-
- ### Returns
- New OfficeParserConfig handle or NULL if handle is invalid.
-
- ### Safety
- Input handle is consumed.
+ Enables or disables extraction of inline images. Modifies the config in-place.
  */
-struct COfficeParserConfig *extractous_office_config_set_extract_macros(struct COfficeParserConfig *handle,
-                                                                        bool value);
+void extractous_pdf_config_set_extract_inline_images(struct CPdfParserConfig *handle, bool value);
 
 /*
- Include deleted content from DOCX track changes
-
- When enabled, extracts text that was deleted but is still present in
- the document's revision history.
-
- ### Arguments
- * `handle` - Valid OfficeParserConfig pointer
- * `value` - true to include deleted text, false to skip
-
- ### Returns
- New OfficeParserConfig handle or NULL if handle is invalid.
-
- ### Safety
- Input handle is consumed.
+ If enabled, only unique inline images (by digest) will be extracted.
  */
-struct COfficeParserConfig *extractous_office_config_set_include_deleted_content(struct COfficeParserConfig *handle,
-                                                                                 bool value);
+void extractous_pdf_config_set_extract_unique_inline_images_only(struct CPdfParserConfig *handle,
+                                                                 bool value);
 
 /*
- Include "move-from" content in DOCX documents
-
- Extracts text that was moved from one location to another during editing.
-
- ### Arguments
- * `handle` - Valid OfficeParserConfig pointer
- * `value` - true to include moved text, false to skip
-
- ### Returns
- New OfficeParserConfig handle or NULL if handle is invalid.
-
- ### Safety
- Input handle is consumed.
+ Enables or disables extraction of text from marked content sections.
  */
-struct COfficeParserConfig *extractous_office_config_set_include_move_from_content(struct COfficeParserConfig *handle,
-                                                                                   bool value);
+void extractous_pdf_config_set_extract_marked_content(struct CPdfParserConfig *handle, bool value);
 
 /*
- Include text from drawing shapes and text boxes
-
- When enabled, extracts text from shapes, text boxes, and other drawing objects.
-
- ### Arguments
- * `handle` - Valid OfficeParserConfig pointer
- * `value` - true to include shape text (recommended), false to skip
-
- ### Returns
- New OfficeParserConfig handle or NULL if handle is invalid.
-
- ### Safety
- Input handle is consumed.
+ Enables or disables extraction of text from annotations.
  */
-struct COfficeParserConfig *extractous_office_config_set_include_shape_based_content(struct COfficeParserConfig *handle,
-                                                                                     bool value);
+void extractous_pdf_config_set_extract_annotation_text(struct CPdfParserConfig *handle, bool value);
 
 /*
- Free Office parser configuration
+ Creates a new Office parser configuration with default settings.
+ */
+auto struct COfficeParserConfig *extractous_office_config_new(void);
 
- ### Safety
- - `handle` must be valid and not used after this call
- - Do not call this if config was attached to an extractor
+/*
+ Frees the memory associated with an Office parser configuration.
  */
 void extractous_office_config_free(struct COfficeParserConfig *handle);
 
 /*
- Create a new Tesseract OCR configuration with default settings
-
- Default configuration:
- - Language: "eng" (English)
- - Density: 300 DPI
- - Depth: 32 bits
- - Image preprocessing: true
- - Timeout: 300 seconds
-
- ### Prerequisites
- Tesseract must be installed on the system with appropriate language data files.
-
- ### Returns
- Pointer to new TesseractOcrConfig. Must be freed with `extractous_ocr_config_free()`
- unless attached to an extractor.
+ Enables or disables macro extraction. Modifies the config in-place.
  */
-struct CTesseractOcrConfig *extractous_ocr_config_new(void);
+void extractous_office_config_set_extract_macros(struct COfficeParserConfig *handle, bool value);
 
 /*
- Set the OCR language
-
- Specifies which language(s) Tesseract should use for recognition.
- Multiple languages can be specified with '+' separator (e.g., "eng+fra").
-
- ### Arguments
- * `handle` - Valid TesseractOcrConfig pointer
- * `language` - Null-terminated UTF-8 language code (e.g., "eng", "deu", "eng+fra")
-
- ### Returns
- New TesseractOcrConfig handle or NULL if handle or language is invalid.
-
- ### Common Language Codes
- - "eng" - English
- - "deu" - German
- - "fra" - French
- - "spa" - Spanish
-
- ### Requirements
- The specified language data must be installed on the system.
- On Debian/Ubuntu: `apt install tesseract-ocr-[lang]`
-
- ### Safety
- Input handle is consumed. Language string must be valid UTF-8.
+ Enables or disables inclusion of deleted content (track changes).
  */
-struct CTesseractOcrConfig *extractous_ocr_config_set_language(struct CTesseractOcrConfig *handle,
-                                                               const char *language);
+void extractous_office_config_set_include_deleted_content(struct COfficeParserConfig *handle,
+                                                          bool value);
 
 /*
- Set the DPI (dots per inch) for OCR processing
-
- Higher DPI values can improve accuracy but increase processing time.
-
- ### Arguments
- * `handle` - Valid TesseractOcrConfig pointer
- * `density` - DPI value (recommended: 150-600, default: 300)
-
- ### Returns
- New TesseractOcrConfig handle or NULL if handle is invalid.
-
- ### Recommendations
- - 150 DPI: Fast, lower quality
- - 300 DPI: Balanced (default)
- - 400-600 DPI: High quality, slower
-
- ### Safety
- Input handle is consumed.
+ Enables or disables inclusion of moved-from content (track changes).
  */
-struct CTesseractOcrConfig *extractous_ocr_config_set_density(struct CTesseractOcrConfig *handle,
-                                                              int32_t density);
+void extractous_office_config_set_include_move_from_content(struct COfficeParserConfig *handle,
+                                                            bool value);
 
 /*
- Set the color depth for OCR processing
-
- ### Arguments
- * `handle` - Valid TesseractOcrConfig pointer
- * `depth` - Bit depth (typically 8, 24, or 32)
-
- ### Returns
- New TesseractOcrConfig handle or NULL if handle is invalid.
-
- ### Safety
- Input handle is consumed.
+ Enables or disables inclusion of content from shapes.
  */
-struct CTesseractOcrConfig *extractous_ocr_config_set_depth(struct CTesseractOcrConfig *handle,
-                                                            int32_t depth);
+void extractous_office_config_set_include_shape_based_content(struct COfficeParserConfig *handle,
+                                                              bool value);
 
 /*
- Enable or disable image preprocessing for OCR
-
- Preprocessing can improve OCR accuracy by normalizing image quality,
- adjusting contrast, removing noise, etc.
-
- ### Arguments
- * `handle` - Valid TesseractOcrConfig pointer
- * `value` - true to enable preprocessing (recommended), false to disable
-
- ### Returns
- New TesseractOcrConfig handle or NULL if handle is invalid.
-
- ### Safety
- Input handle is consumed.
+ Creates a new Tesseract OCR configuration with default settings.
  */
-struct CTesseractOcrConfig *extractous_ocr_config_set_enable_image_preprocessing(struct CTesseractOcrConfig *handle,
-                                                                                 bool value);
+auto struct CTesseractOcrConfig *extractous_ocr_config_new(void);
 
 /*
- Set timeout for OCR processing
-
- Prevents OCR from running indefinitely on problematic images.
-
- ### Arguments
- * `handle` - Valid TesseractOcrConfig pointer
- * `seconds` - Timeout in seconds (0 = no timeout, default: 300)
-
- ### Returns
- New TesseractOcrConfig handle or NULL if handle is invalid.
-
- # Recommendations
- - 60-120 seconds: Fast processing, may timeout on complex images
- - 300 seconds: Default, handles most documents
- - 600+ seconds: Very complex documents
-
- ### Safety
- Input handle is consumed.
- */
-struct CTesseractOcrConfig *extractous_ocr_config_set_timeout_seconds(struct CTesseractOcrConfig *handle,
-                                                                      int32_t seconds);
-
-/*
- Free Tesseract OCR configuration
-
- ### Safety
- - `handle` must be valid and not used after this call
- - Do not call this if config was attached to an extractor
+ Frees the memory associated with a Tesseract OCR configuration.
  */
 void extractous_ocr_config_free(struct CTesseractOcrConfig *handle);
 
 /*
- Get human-readable error message for error code
-
- Returns a newly allocated string containing the error description.
- The caller must free the returned string with `extractous_string_free()`.
-
- ### Arguments
- * `code` - Error code returned by an extractous function
-
- ### Returns
- Pointer to null-terminated UTF-8 string, or NULL if allocation fails.
-
- ### Example
- ```c
- int err = extractous_extractor_extract_file(...);
- if (err != ERR_OK) {
-     char* msg = extractous_error_message(err);
-     printf("Error: %s\n", msg);
-     extractous_string_free(msg);
- }
- ```
-
- ### Safety
- - Return value must be freed with `extractous_string_free()`
- - Do not modify the returned string
+ Sets the OCR language. Modifies the config in-place.
  */
+void extractous_ocr_config_set_language(struct CTesseractOcrConfig *handle, const char *language);
+
+/*
+ Sets the DPI for OCR processing. Modifies the config in-place.
+ */
+void extractous_ocr_config_set_density(struct CTesseractOcrConfig *handle, int32_t density);
+
+/*
+ Sets the bit depth for OCR processing.
+ */
+void extractous_ocr_config_set_depth(struct CTesseractOcrConfig *handle, int32_t depth);
+
+/*
+ Enables or disables image preprocessing for OCR.
+ */
+void extractous_ocr_config_set_enable_image_preprocessing(struct CTesseractOcrConfig *handle,
+                                                          bool value);
+
+/*
+ Sets the timeout for the Tesseract process in seconds.
+ */
+void extractous_ocr_config_set_timeout_seconds(struct CTesseractOcrConfig *handle, int32_t seconds);
+
 char *extractous_error_message(int code);
 
 /*
- Get error category description
-
- Returns a high-level categorization of the error.
-
- ### Arguments
- * `code` - Error code
-
- ### Returns
- Static string pointer (do not free)
-
- ### Safety
- Return value points to static memory and must not be freed.
- */
-const char *extractous_error_category(int code);
-
-/*
- Retrieve detailed debug information for the last error on this thread
-
- This function formats the stored error with full debug representation
- including error chain and backtrace (if RUST_BACKTRACE=1).
-
- **Important**: This clears the stored error after retrieval.
- Subsequent calls return NULL unless a new error occurs.
-
- # Returns
- - Pointer to null-terminated UTF-8 string with debug info
- - NULL if no error has occurred on this thread
-
- # Safety
- - Returned string must be freed with `extractous_string_free()`
- - This function is thread-safe (uses thread-local storage)
-
- # Performance
- This function does expensive string formatting. Only call it when
- you actually need debug information (e.g., logging, debugging).
-
- # Example
- ```
- int code = extractous_extractor_extract_file_to_string(...);
- if (code != ERR_OK) {
-     // Get user-facing message (fast)
-     char* msg = extractous_error_message(code);
-     printf("Error: %s\n", msg);
-     extractous_string_free(msg);
-
-     // Optionally get debug info (slower, for developers)
-     char* debug = extractous_error_get_last_debug();
-     if (debug) {
-         fprintf(stderr, "Debug details:\n%s\n", debug);
-         extractous_string_free(debug);
-     }
- }
- ```
+ Retrieves a detailed debug report for the last error on this thread
+ full error chain and a backtrace if RUST_BACKTRACE=1
  */
 char *extractous_error_get_last_debug(void);
 
 /*
- Check if there is a stored error for the current thread
-
- This is useful to check if debug info is available before
- calling the more expensive `extractous_error_get_last_debug()`.
-
- # Returns
- - 1 if an error is stored
- - 0 if no error is stored
+ Checks if debug information is available for the current thread
  */
 int extractous_error_has_debug(void);
 
-/*
- Clear any stored error for the current thread without retrieving it
-
- This is useful to reset error state without the overhead of formatting.
- */
 void extractous_error_clear_last(void);
 
 /*
- Create a new Extractor with default configuration
-
- ### Returns
- Pointer to new Extractor, or NULL on failure.
- Must be freed with `extractous_extractor_free`.
+ Creates a new `Extractor` with a default configuration.
+ The returned handle must be freed with `extractous_extractor_free`.
  */
-struct CExtractor *extractous_extractor_new(void);
+auto struct CExtractor *extractous_extractor_new(void);
 
 /*
- Free an Extractor instance
-
- ### Safety
- - `handle` must be a valid pointer returned by `extractous_extractor_new`
- - `handle` must not be used after this call
- - Calling this twice on the same pointer causes undefined behavior
+ Frees the memory associated with an `Extractor` handle.
  */
 void extractous_extractor_free(struct CExtractor *handle);
 
 /*
- Set maximum length for extracted string content
-
- ### Safety
- - `handle` must be a valid Extractor pointer
- - Returns a NEW handle; old handle is consumed and must not be used
-
- ### Returns
- New Extractor handle with updated config, or NULL on error.
+ Sets the maximum length for extracted string content.
  */
-struct CExtractor *extractous_extractor_set_extract_string_max_length(struct CExtractor *handle,
-                                                                      int max_length);
+void extractous_extractor_set_extract_string_max_length_mut(struct CExtractor *handle,
+                                                            int max_length);
 
 /*
- Set character encoding for extraction
-
- ### Safety
- - `handle` must be a valid Extractor pointer
- - `encoding` must be a valid CHARSET_* constant
- - Returns a NEW handle; old handle is consumed
-
- ### Returns
- New Extractor handle, or NULL if encoding is invalid.
+ Sets the character encoding for the extracted text.
  */
-struct CExtractor *extractous_extractor_set_encoding(struct CExtractor *handle, int encoding);
+void extractous_extractor_set_encoding_mut(struct CExtractor *handle, int encoding);
 
 /*
- Set PDF parser configuration
-
- ### Safety
- - `handle` must be a valid Extractor pointer
- - `config` must be a valid PdfParserConfig pointer
- - Returns a NEW handle; old handle is consumed
+ Sets the configuration for the PDF parser.
  */
-struct CExtractor *extractous_extractor_set_pdf_config(struct CExtractor *handle,
-                                                       struct CPdfParserConfig *config);
+void extractous_extractor_set_pdf_config_mut(struct CExtractor *handle,
+                                             const struct CPdfParserConfig *config);
 
 /*
- Set Office parser configuration
-
- ### Safety
- Same safety requirements as `extractous_extractor_set_pdf_config`.
+ Sets the configuration for the Office document parser.
  */
-struct CExtractor *extractous_extractor_set_office_config(struct CExtractor *handle,
-                                                          struct COfficeParserConfig *config);
+void extractous_extractor_set_office_config_mut(struct CExtractor *handle,
+                                                const struct COfficeParserConfig *config);
 
 /*
- Set OCR configuration
-
- ### Safety
- Same safety requirements as `extractous_extractor_set_pdf_config`.
+ Sets the configuration for Tesseract OCR.
  */
-struct CExtractor *extractous_extractor_set_ocr_config(struct CExtractor *handle,
-                                                       struct CTesseractOcrConfig *config);
+void extractous_extractor_set_ocr_config_mut(struct CExtractor *handle,
+                                             const struct CTesseractOcrConfig *config);
 
 /*
- Set whether to output XML structure
-
- ### Safety
- - `handle` must be a valid Extractor pointer
- - Returns a NEW handle; old handle is consumed
+ Sets whether to output structured XML instead of plain text.
  */
-struct CExtractor *extractous_extractor_set_xml_output(struct CExtractor *handle, bool xml_output);
+void extractous_extractor_set_xml_output_mut(struct CExtractor *handle, bool xml_output);
 
 /*
- Extract file content to string
+ Extracts content and metadata from a local file path into a string.
 
- ### Safety
- - `handle` must be a valid Extractor pointer
- - `path` must be a valid null-terminated UTF-8 string
- - `out_content` and `out_metadata` must be valid pointers
- - Caller must free returned content with `extractous_string_free`
- - Caller must free returned metadata with `extractous_metadata_free`
-
- ### Returns
- ERR_OK on success, error code on failure.
+ Output strings must be freed with `extractous_string_free`.
+ Output metadata must be freed with `extractous_metadata_free`.
  */
 int extractous_extractor_extract_file_to_string(struct CExtractor *handle,
                                                 const char *path,
@@ -959,17 +294,7 @@ int extractous_extractor_extract_file_to_string(struct CExtractor *handle,
                                                 struct CMetadata **out_metadata);
 
 /*
- Extract file content to stream
-
- ### Safety
- - `handle` must be a valid Extractor pointer
- - `path` must be a valid null-terminated UTF-8 string
- - `out_reader` and `out_metadata` must be valid pointers
- - Caller must free returned reader with `extractous_stream_free`
- - Caller must free returned metadata with `extractous_metadata_free`
-
- ### Returns
- ERR_OK on success, error code on failure.
+ Extracts content and metadata from a local file path into a stream.
  */
 int extractous_extractor_extract_file(struct CExtractor *handle,
                                       const char *path,
@@ -977,15 +302,7 @@ int extractous_extractor_extract_file(struct CExtractor *handle,
                                       struct CMetadata **out_metadata);
 
 /*
- Extract from byte array to string
-
- ### Safety
- - `handle` must be a valid Extractor pointer
- - `data` must point to at least `data_len` valid bytes
- - `out_content` and `out_metadata` must be valid pointers
-
- ### Returns
- ERR_OK on success, error code on failure.
+ Extracts content and metadata from a byte slice into a string.
  */
 int extractous_extractor_extract_bytes_to_string(struct CExtractor *handle,
                                                  const uint8_t *data,
@@ -994,15 +311,7 @@ int extractous_extractor_extract_bytes_to_string(struct CExtractor *handle,
                                                  struct CMetadata **out_metadata);
 
 /*
- Extract from byte array to stream
-
- ### Safety
- - `handle` must be a valid Extractor pointer
- - `data` must point to at least `data_len` valid bytes
- - `out_reader` and `out_metadata` must be valid pointers
-
- ### Returns
- ERR_OK on success, error code on failure.
+ Extracts content and metadata from a byte slice into a stream.
  */
 int extractous_extractor_extract_bytes(struct CExtractor *handle,
                                        const uint8_t *data,
@@ -1011,27 +320,7 @@ int extractous_extractor_extract_bytes(struct CExtractor *handle,
                                        struct CMetadata **out_metadata);
 
 /*
- Free a string allocated by Rust
-
- ### Safety
- - `s` must be a pointer returned by an extractous function
- - `s` must not be used after this call
- - Calling this twice on the same pointer causes undefined behavior
- */
-void extractous_string_free(char *s);
-
-/*
- Extract URL content to string
-
- ### Safety
- - `handle` must be a valid Extractor pointer
- - `url` must be a valid null-terminated UTF-8 string
- - `out_content` and `out_metadata` must be valid pointers
- - Caller must free returned content with `extractous_string_free`
- - Caller must free returned metadata with `extractous_metadata_free`
-
- ### Returns
- ERR_OK on success, error code on failure.
+ Extracts content and metadata from a URL into a string.
  */
 int extractous_extractor_extract_url_to_string(struct CExtractor *handle,
                                                const char *url,
@@ -1039,17 +328,7 @@ int extractous_extractor_extract_url_to_string(struct CExtractor *handle,
                                                struct CMetadata **out_metadata);
 
 /*
- Extract URL content to stream
-
- ### Safety
- - `handle` must be a valid Extractor pointer
- - `url` must be a valid null-terminated UTF-8 string
- - `out_reader` and `out_metadata` must be valid pointers
- - Caller must free returned reader with `extractous_stream_free`
- - Caller must free returned metadata with `extractous_metadata_free`
-
- ### Returns
- ERR_OK on success, error code on failure.
+ Extracts content and metadata from a URL into a stream.
  */
 int extractous_extractor_extract_url(struct CExtractor *handle,
                                      const char *url,
@@ -1057,77 +336,20 @@ int extractous_extractor_extract_url(struct CExtractor *handle,
                                      struct CMetadata **out_metadata);
 
 /*
- Free a metadata structure and all associated memory.
+ Frees a C-style string that was allocated by this library.
+ */
+void extractous_string_free(char *s);
 
- Frees:
- 1. All individual key strings
- 2. All individual value strings
- 3. The key array
- 4. The value array
- 5. The `CMetadata` structure itself
-
- ### Arguments
- * `metadata` - Pointer to a `CMetadata` structure to free
-
- ### Safety
- - `metadata` must be a pointer returned by an extraction function
- - `metadata` must not be used after this call
- - Safe to call with NULL (no-op)
-
- ### Example
- ```c
- CMetadata* metadata;
- extractous_extractor_extract_file_to_string(extractor, path, &content, &metadata);
- // ... use metadata ...
- extractous_metadata_free(metadata);
- ```
+/*
+ Frees a metadata structure and all associated memory.
  */
 void extractous_metadata_free(struct CMetadata *metadata);
 
 /*
- Read data from stream into buffer
+ Reads data from a stream into a user-provided buffer.
 
- Reads up to `buffer_size` bytes from the stream into the provided buffer.
- Returns the actual number of bytes read in `bytes_read`.
-
- ### Arguments
- * `handle` - Valid StreamReader pointer
- * `buffer` - Pointer to buffer where data will be written
- * `buffer_size` - Size of the buffer in bytes
- * `bytes_read` - Output pointer for number of bytes actually read (can be NULL)
-
- ### Returns
- * `ERR_OK` - Read successful (check bytes_read for amount)
- * `ERR_NULL_POINTER` - handle or buffer is NULL
- * `ERR_IO_ERROR` - Read operation failed
-
- ### End of Stream
- When end of stream is reached:
- - Function returns `ERR_OK`
- - `bytes_read` is set to 0
-
- ### Example
- ```c
- char buffer[4096];
- size_t n;
- int result = extractous_stream_read(reader, buffer, sizeof(buffer), &n);
-
- if (result == ERR_OK) {
-     if (n > 0) {
-         // Process n bytes of data in buffer
-     } else {
-         // End of stream reached
-     }
- } else {
-     // Error occurred
- }
- ```
-
- ### Safety
- - `handle` must be a valid StreamReader pointer
- - `buffer` must point to at least `buffer_size` writable bytes
- - `bytes_read` must be NULL or point to valid size_t
- - Buffer content is undefined if function returns error
+ Returns the actual number of bytes read via the `bytes_read` output parameter.
+ Reaching the end of the stream is indicated by `ERR_OK` and `*bytes_read == 0`.
  */
 int extractous_stream_read(struct CStreamReader *handle,
                            uint8_t *buffer,
@@ -1135,29 +357,10 @@ int extractous_stream_read(struct CStreamReader *handle,
                            size_t *bytes_read);
 
 /*
- Read exactly the requested number of bytes or fail
+ Reads exactly `buffer_size` bytes from the stream.
 
- Similar to `extractous_stream_read()` but guarantees that exactly
- `buffer_size` bytes are read unless end of stream or error occurs.
-
- ### Arguments
- * `handle` - Valid StreamReader pointer
- * `buffer` - Pointer to buffer where data will be written
- * `buffer_size` - Exact number of bytes to read
- * `bytes_read` - Output pointer for number of bytes actually read (can be NULL)
-
- ### Returns
- * `ERR_OK` - Successfully read exactly `buffer_size` bytes
- * `ERR_OK` with bytes_read < buffer_size - End of stream reached
- * `ERR_NULL_POINTER` - handle or buffer is NULL
- * `ERR_IO_ERROR` - Read operation failed
-
- ### Use Cases
- - Reading fixed-size headers or chunks
- - When partial reads are not acceptable
-
- ### Safety
- - Same safety requirements as `extractous_stream_read()`
+ Function will continue reading until the buffer is full, or the end of
+ the stream is reached, or an error occurs.
  */
 int extractous_stream_read_exact(struct CStreamReader *handle,
                                  uint8_t *buffer,
@@ -1165,94 +368,20 @@ int extractous_stream_read_exact(struct CStreamReader *handle,
                                  size_t *bytes_read);
 
 /*
- Read entire remaining stream into a newly allocated buffer
-
- Reads all remaining data from the stream and returns it in a newly
- allocated buffer. Useful for smaller streams where you want all data at once.
-
- **Warning**: This loads all content into memory. For large documents,
- prefer using `extractous_stream_read()` in a loop.
-
- ### Arguments
- * `handle` - Valid StreamReader pointer
- * `out_buffer` - Output pointer for allocated buffer
- * `out_size` - Output pointer for buffer size
-
- ### Returns
- * `ERR_OK` - Success, buffer allocated and filled
- * `ERR_NULL_POINTER` - Invalid pointer argument
- * `ERR_IO_ERROR` - Read operation failed
- * `ERR_OUT_OF_MEMORY` - Memory allocation failed
-
- ### Memory Management
- The caller must free the returned buffer using `extractous_buffer_free()`.
-
- ### Example
- ```c
- uint8_t* data;
- size_t size;
- int result = extractous_stream_read_all(reader, &data, &size);
-
- if (result == ERR_OK) {
-     // Use data (size bytes)
-     process_data(data, size);
-
-     // Free the buffer
-     extractous_buffer_free(data);
- }
- ```
-
- ### Safety
- - `handle` must be a valid StreamReader pointer
- - `out_buffer` and `out_size` must be valid pointers
- - Returned buffer must be freed with `extractous_buffer_free()`
+ Reads the remaining stream into a newly allocated buffer.
  */
+auto
 int extractous_stream_read_all(struct CStreamReader *handle,
                                uint8_t **out_buffer,
                                size_t *out_size);
 
 /*
- Free a buffer allocated by extractous_stream_read_all
-
- ### Arguments
- * `buffer` - Pointer to buffer returned by `extractous_stream_read_all()`
- * `size` - Size of the buffer in bytes
-
- ### Safety
- - `buffer` must be a pointer returned by `extractous_stream_read_all()`
- - `size` must match the size returned by that function
- - `buffer` must not be used after this call
- - Do not call this function twice on the same buffer
-
- ### Example
- ```c
- uint8_t* data;
- size_t size;
- extractous_stream_read_all(reader, &data, &size);
- // ... use data ...
- extractous_buffer_free(data, size);
- ```
+ Frees a buffer allocated by `extractous_stream_read_all`.
  */
 void extractous_buffer_free(uint8_t *buffer, size_t size);
 
 /*
- Free stream reader and release associated resources
-
- ### Arguments
- * `handle` - StreamReader pointer to free
-
- ### Safety
- - `handle` must be a valid StreamReader pointer
- - `handle` must not be used after this call
- - Calling this function twice on the same pointer causes undefined behavior
- - Safe to call with NULL (no-op)
-
- ### Example
- ```c
- CStreamReader* reader;
- // ... extract to stream and use reader ...
- extractous_stream_free(reader);  // Always free when done
- ```
+ Frees a stream reader and releases its resources.
  */
 void extractous_stream_free(struct CStreamReader *handle);
 
