@@ -72,7 +72,7 @@ func NewPdfConfig() *PdfConfig {
 	ptr := C.extractous_pdf_config_new()
 	if ptr == nil {
 		return nil
-		
+
 	}
 
 	cfg := &PdfConfig{ptr: ptr}
@@ -105,11 +105,7 @@ func NewPdfConfig() *PdfConfig {
 // This method consumes the receiver and returns a new PdfConfig.
 // Returns nil if the strategy is invalid.
 func (c *PdfConfig) SetOcrStrategy(strategy PdfOcrStrategy) *PdfConfig {
-	newPtr := C.extractous_pdf_config_set_ocr_strategy(c.ptr, C.int(strategy))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_pdf_config_set_ocr_strategy(c.ptr, C.int(strategy))
 	return c
 }
 
@@ -135,11 +131,7 @@ func (c *PdfConfig) SetOcrStrategy(strategy PdfOcrStrategy) *PdfConfig {
 //
 // This method consumes the receiver and returns a new PdfConfig.
 func (c *PdfConfig) SetExtractInlineImages(value bool) *PdfConfig {
-	newPtr := C.extractous_pdf_config_set_extract_inline_images(c.ptr, C.bool(value))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_pdf_config_set_extract_inline_images(c.ptr, C.bool(value))
 	return c
 }
 
@@ -169,11 +161,8 @@ func (c *PdfConfig) SetExtractInlineImages(value bool) *PdfConfig {
 //
 // This method consumes the receiver and returns a new PdfConfig.
 func (c *PdfConfig) SetExtractUniqueInlineImagesOnly(value bool) *PdfConfig {
-	newPtr := C.extractous_pdf_config_set_extract_unique_inline_images_only(c.ptr, C.bool(value))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_pdf_config_set_extract_unique_inline_images_only(c.ptr, C.bool(value))
+
 	return c
 }
 
@@ -203,11 +192,8 @@ func (c *PdfConfig) SetExtractUniqueInlineImagesOnly(value bool) *PdfConfig {
 //
 // This method consumes the receiver and returns a new PdfConfig.
 func (c *PdfConfig) SetExtractMarkedContent(value bool) *PdfConfig {
-	newPtr := C.extractous_pdf_config_set_extract_marked_content(c.ptr, C.bool(value))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_pdf_config_set_extract_marked_content(c.ptr, C.bool(value))
+
 	return c
 }
 
@@ -237,11 +223,8 @@ func (c *PdfConfig) SetExtractMarkedContent(value bool) *PdfConfig {
 //
 // This method consumes the receiver and returns a new PdfConfig.
 func (c *PdfConfig) SetExtractAnnotationText(value bool) *PdfConfig {
-	newPtr := C.extractous_pdf_config_set_extract_annotation_text(c.ptr, C.bool(value))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_pdf_config_set_extract_annotation_text(c.ptr, C.bool(value))
+
 	return c
 }
 
@@ -338,11 +321,8 @@ func NewOfficeConfig() *OfficeConfig {
 //
 // This method consumes the receiver and returns a new OfficeConfig.
 func (c *OfficeConfig) SetExtractMacros(value bool) *OfficeConfig {
-	newPtr := C.extractous_office_config_set_extract_macros(c.ptr, C.bool(value))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_office_config_set_extract_macros(c.ptr, C.bool(value))
+
 	return c
 }
 
@@ -371,11 +351,8 @@ func (c *OfficeConfig) SetExtractMacros(value bool) *OfficeConfig {
 //
 // This method consumes the receiver and returns a new OfficeConfig.
 func (c *OfficeConfig) SetIncludeDeletedContent(value bool) *OfficeConfig {
-	newPtr := C.extractous_office_config_set_include_deleted_content(c.ptr, C.bool(value))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_office_config_set_include_deleted_content(c.ptr, C.bool(value))
+
 	return c
 }
 
@@ -401,11 +378,8 @@ func (c *OfficeConfig) SetIncludeDeletedContent(value bool) *OfficeConfig {
 //
 // This method consumes the receiver and returns a new OfficeConfig.
 func (c *OfficeConfig) SetIncludeMoveFromContent(value bool) *OfficeConfig {
-	newPtr := C.extractous_office_config_set_include_move_from_content(c.ptr, C.bool(value))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_office_config_set_include_move_from_content(c.ptr, C.bool(value))
+
 	return c
 }
 
@@ -435,11 +409,8 @@ func (c *OfficeConfig) SetIncludeMoveFromContent(value bool) *OfficeConfig {
 //
 // This method consumes the receiver and returns a new OfficeConfig.
 func (c *OfficeConfig) SetIncludeShapeBasedContent(value bool) *OfficeConfig {
-	newPtr := C.extractous_office_config_set_include_shape_based_content(c.ptr, C.bool(value))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_office_config_set_include_shape_based_content(c.ptr, C.bool(value))
+
 	return c
 }
 
@@ -575,11 +546,8 @@ func (c *OcrConfig) SetLanguage(lang string) *OcrConfig {
 	cLang := cString(lang)
 	defer freeString(cLang)
 
-	newPtr := C.extractous_ocr_config_set_language(c.ptr, cLang)
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_ocr_config_set_language(c.ptr, cLang)
+
 	return c
 }
 
@@ -610,11 +578,8 @@ func (c *OcrConfig) SetLanguage(lang string) *OcrConfig {
 //
 // This method consumes the receiver and returns a new OcrConfig.
 func (c *OcrConfig) SetDensity(dpi int) *OcrConfig {
-	newPtr := C.extractous_ocr_config_set_density(c.ptr, C.int32_t(dpi))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_ocr_config_set_density(c.ptr, C.int32_t(dpi))
+
 	return c
 }
 
@@ -648,11 +613,8 @@ func (c *OcrConfig) SetDensity(dpi int) *OcrConfig {
 //
 // This method consumes the receiver and returns a new OcrConfig.
 func (c *OcrConfig) SetDepth(depth int) *OcrConfig {
-	newPtr := C.extractous_ocr_config_set_depth(c.ptr, C.int32_t(depth))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_ocr_config_set_depth(c.ptr, C.int32_t(depth))
+
 	return c
 }
 
@@ -692,11 +654,8 @@ func (c *OcrConfig) SetDepth(depth int) *OcrConfig {
 //
 // This method consumes the receiver and returns a new OcrConfig.
 func (c *OcrConfig) SetEnableImagePreprocessing(value bool) *OcrConfig {
-	newPtr := C.extractous_ocr_config_set_enable_image_preprocessing(c.ptr, C.bool(value))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_ocr_config_set_enable_image_preprocessing(c.ptr, C.bool(value))
+
 	return c
 }
 
@@ -730,11 +689,7 @@ func (c *OcrConfig) SetEnableImagePreprocessing(value bool) *OcrConfig {
 //
 // This method consumes the receiver and returns a new OcrConfig.
 func (c *OcrConfig) SetTimeoutSeconds(seconds int) *OcrConfig {
-	newPtr := C.extractous_ocr_config_set_timeout_seconds(c.ptr, C.int32_t(seconds))
-	if newPtr == nil {
-		return nil
-	}
-	c.ptr = newPtr
+	C.extractous_ocr_config_set_timeout_seconds(c.ptr, C.int32_t(seconds))
 	return c
 }
 

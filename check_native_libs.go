@@ -29,16 +29,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Check for the common header file
-	headerFile := filepath.Join(nativeDir, "include", "extractous.h")
-	if _, err := os.Stat(headerFile); os.IsNotExist(err) {
-		printError()
-		os.Exit(1)
-	}
-
 	// Check for the platform-specific library directory
 	platform := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
-	libDir := filepath.Join(nativeDir, platform, "lib")
+	libDir := filepath.Join(nativeDir, platform)
 
 	if _, err := os.Stat(libDir); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "\n")
@@ -68,7 +61,6 @@ func main() {
 
 	// Success - libraries are present
 	fmt.Printf("✓ Native libraries verified for %s\n", platform)
-	fmt.Printf("  Header: %s\n", headerFile)
 	fmt.Printf("  Library: %s\n", libFile)
 }
 
