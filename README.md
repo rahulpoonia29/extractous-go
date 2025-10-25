@@ -205,7 +205,7 @@ $env:CC = "gcc"
 $env:CXX = "g++"
 
 # Set library path for the build
-$env:CGO_LDFLAGS = "-L$pwd\native\windows_amd64 -lextractous_ffi" // Only 64 bit is supported
+$env:CGO_LDFLAGS = "-L$pwd\native\windows_amd64 -lextractous_ffi" # Only x86-64 is supported
 
 # Build the application
 go build -o myapp.exe main.go
